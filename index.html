@@ -1,0 +1,2640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Playground — a parameter workbench for language models</title>
+<meta name="description" content="Paste your own provider key, set temperature and output length, and test a language model directly in the browser.">
+<meta name="color-scheme" content="dark">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --deep: #07080d;
+    --bg: #0b0d14;
+    --surface: #11141c;
+    --raised: #1a1e28;
+    --raised-2: #222733;
+    --text: #eef0f5;
+    --secondary: #a3a9b8;
+    --muted: #7a8296;
+    --line: rgba(238, 240, 245, 0.08);
+    --line-strong: rgba(238, 240, 245, 0.14);
+    --accent: #f0a45c;
+    --accent-ink: #1d1305;
+    --accent-soft: rgba(240, 164, 92, 0.12);
+    --positive: #4cc38a;
+    --negative: #e5484d;
+    --negative-soft: rgba(229, 72, 77, 0.09);
+    --r-sm: 6px;
+    --r-control: 10px;
+    --r-card: 14px;
+    --r-panel: 16px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body.llmpg {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: 0; padding: 0; }
+  a { color: inherit; }
+  h1, h2, h3, p { margin: 0; }
+  svg { display: block; }
+  .i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  ::selection { background: var(--accent-soft); color: var(--text); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--raised); border: 3px solid transparent; background-clip: content-box; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--raised-2); background-clip: content-box; }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; height: 100dvh; overflow: hidden; background: var(--bg); }
+
+  /* ---------- sidebar ---------- */
+  .sidebar {
+    width: 256px; flex: 0 0 256px;
+    background: var(--deep);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; min-height: 0;
+    z-index: 30;
+  }
+  .sidebar-brand { height: 56px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--line); }
+  .brand-mark { width: 24px; height: 24px; flex: none; color: var(--accent); }
+  .brand-mark svg { width: 100%; height: 100%; }
+  .brand-mark .frame { stroke: var(--line-strong); }
+  .brand-name { font-size: 14px; font-weight: 500; letter-spacing: -0.01em; }
+  .brand-version { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: 0.02em; }
+  .sidebar-inner { padding: 12px; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  .new-session {
+    display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 10px;
+    border-radius: var(--r-control); background: var(--surface); border: 1px solid var(--line);
+    color: var(--text); font-size: 13px; font-weight: 500;
+    transition: background-color 140ms var(--ease), border-color 140ms var(--ease);
+  }
+  .new-session:hover { background: var(--raised); border-color: var(--line-strong); }
+  .new-session:active { transform: scale(0.985); }
+  .new-session .i { color: var(--secondary); }
+  .sidebar-label { display: flex; align-items: center; justify-content: space-between; margin: 24px 8px 8px; font-size: 12px; color: var(--muted); }
+  .sidebar-label .mono { font-size: 11px; color: var(--muted); }
+  .session-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; flex: 1; margin: 0 -4px; padding: 0 4px 8px; }
+  .sess {
+    display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 8px;
+    border-radius: 8px; border: 1px solid transparent; color: var(--secondary); text-align: left;
+    transition: background-color 140ms var(--ease), color 140ms var(--ease), border-color 140ms var(--ease);
+  }
+  .sess .i { width: 14px; height: 14px; color: var(--muted); }
+  .sess:hover { background: rgba(238, 240, 245, 0.04); color: var(--text); }
+  .sess.active { background: var(--raised); border-color: var(--line); color: var(--text); box-shadow: inset 0 1px 0 rgba(238, 240, 245, 0.06); }
+  .sess.active .i { color: var(--secondary); }
+  .sess-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .sess-time { font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sess-del { width: 22px; height: 22px; flex: none; border-radius: 6px; display: grid; place-items: center; color: var(--muted); opacity: 0; transition: opacity 140ms var(--ease), background-color 140ms var(--ease), color 140ms var(--ease); }
+  .sess-del .i { width: 13px; height: 13px; color: inherit; }
+  .sess:hover .sess-del, .sess-del:focus-visible { opacity: 1; }
+  .sess-del:hover { background: var(--negative-soft); color: #f0a0a3; }
+  .sess-rename { width: 22px; height: 22px; flex: none; border-radius: 6px; display: grid; place-items: center; color: var(--muted); opacity: 0; transition: opacity 140ms var(--ease), background-color 140ms var(--ease), color 140ms var(--ease); }
+  .sess-rename .i { width: 13px; height: 13px; color: inherit; }
+  .sess:hover .sess-rename, .sess.active .sess-rename, .sess-rename:focus-visible { opacity: 1; }
+  .sess-rename:hover { background: var(--raised); color: var(--text); }
+  .sess:hover .sess-time, .sess:focus-within .sess-time { display: none; }
+  .sess.renaming { background: var(--raised); border-color: rgba(240, 164, 92, 0.3); }
+  .sess.renaming .sess-rename, .sess.renaming .sess-del { display: none; }
+  .sess-rename-input {
+    flex: 1; min-width: 0; height: 24px; margin: 0 0 0 1px; padding: 0 6px;
+    background: var(--deep); border: 1px solid rgba(240, 164, 92, 0.55); border-radius: 5px;
+    font-family: var(--sans); font-size: 12.5px; line-height: 22px; color: var(--text); outline: none;
+  }
+  .sess-rename-input::placeholder { color: var(--muted); }
+  .sidebar-foot { flex: none; border-top: 1px solid var(--line); padding: 12px; }
+  .foot-card {
+    width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+    padding: 10px; border-radius: var(--r-control); border: 1px solid var(--line);
+    background: var(--surface); transition: border-color 140ms var(--ease), background-color 140ms var(--ease);
+  }
+  .foot-card:hover { border-color: var(--line-strong); background: var(--raised); }
+  .foot-icon { width: 28px; height: 28px; flex: none; border-radius: 7px; display: grid; place-items: center; background: var(--raised); color: var(--secondary); }
+  .foot-icon .i { width: 14px; height: 14px; }
+  .foot-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .foot-mode { font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .foot-sub { font-family: var(--mono); font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .foot-chevron { margin-left: auto; color: var(--muted); flex: none; }
+  .foot-chevron .i { width: 14px; height: 14px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: none; display: inline-block; }
+  .dot.positive { background: var(--positive); }
+  .dot.accent { background: var(--accent); }
+  .dot.negative { background: var(--negative); }
+
+  /* ---------- workspace ---------- */
+  .workspace { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .topbar {
+    height: 56px; flex: 0 0 56px; display: flex; align-items: center; gap: 12px;
+    padding: 0 16px 0 24px; border-bottom: 1px solid var(--line); background: var(--bg);
+  }
+  .topbar-title { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .topbar-title h1 { font-size: 14px; font-weight: 500; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; user-select: none; }
+  .topbar-meta { font-size: 10.5px; line-height: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-meta .sep { margin: 0 5px; color: var(--line-strong); }
+  .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+  .icon-btn {
+    width: 30px; height: 30px; flex: none; display: grid; place-items: center;
+    border-radius: 8px; border: 1px solid transparent; color: var(--muted);
+    transition: background-color 140ms var(--ease), color 140ms var(--ease), border-color 140ms var(--ease);
+  }
+  .icon-btn:hover { background: var(--raised); border-color: var(--line); color: var(--text); }
+  .icon-btn:active { transform: scale(0.96); }
+  .icon-btn.danger:hover { background: var(--negative-soft); color: #f0a0a3; border-color: rgba(229, 72, 77, 0.2); }
+  .topbar-sep { width: 1px; height: 20px; background: var(--line); margin: 0 6px; flex: none; }
+  .mode-chip {
+    display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px;
+    border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface);
+    font-family: var(--mono); font-size: 10.5px; color: var(--secondary); white-space: nowrap;
+  }
+  .mode-chip[data-mode="live"] { color: var(--secondary); }
+  .params-toggle { display: none; height: 30px; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--secondary); font-size: 12px; background: var(--surface); margin-left: 6px; }
+  .params-toggle:hover { color: var(--text); background: var(--raised); }
+  .params-toggle .i { width: 14px; height: 14px; }
+
+  .work { display: flex; flex: 1; min-height: 0; }
+  .chat { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+  .chat-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-behavior: smooth; }
+  .transcript { width: 100%; max-width: 860px; margin: 0 auto; padding: 8px 32px 24px; }
+  .transcript-inner { width: 100%; max-width: 860px; margin: 0 auto; padding: 0 32px; }
+
+  /* ---------- empty state ---------- */
+  .empty { padding: 56px 0 32px; max-width: 580px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; line-height: 16px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .empty h2 { margin-top: 12px; font-size: 30px; line-height: 36px; font-weight: 400; letter-spacing: -0.02em; color: var(--text); }
+  .empty-sub { margin-top: 12px; max-width: 48ch; font-size: 15px; line-height: 23px; color: var(--secondary); }
+  .starters { margin-top: 32px; display: flex; flex-direction: column; gap: 8px; }
+  .starter {
+    display: grid; grid-template-columns: 18px 1fr 16px; align-items: center; gap: 12px;
+    width: 100%; padding: 12px 16px; text-align: left;
+    border: 1px solid var(--line); border-radius: var(--r-control); background: transparent;
+    transition: background-color 140ms var(--ease), border-color 140ms var(--ease);
+  }
+  .starter:hover { background: var(--surface); border-color: var(--line-strong); }
+  .starter > .i:first-child { color: var(--muted); }
+  .starter > .i:last-child { color: var(--muted); opacity: 0; transform: translateX(-2px); transition: opacity 140ms var(--ease), transform 140ms var(--ease); }
+  .starter:hover > .i:last-child, .starter:focus-visible > .i:last-child { opacity: 1; transform: none; }
+  .starter-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .starter-label { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .starter-text { font-size: 13px; line-height: 19px; color: var(--text); }
+  .empty-meta { margin-top: 24px; display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--muted); }
+
+  /* ---------- messages ---------- */
+  .messages { display: flex; flex-direction: column; }
+  .msg { padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .msg:last-child { border-bottom: 0; animation: rise 260ms var(--ease) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .msg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 20px; }
+  .msg-role { font-family: var(--mono); font-size: 11px; line-height: 16px; color: var(--secondary); }
+  .msg-role.assistant { color: var(--text); }
+  .msg-role .model-tag { color: var(--muted); }
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 6px;
+    border-radius: 4px; border: 1px solid var(--line); background: var(--surface);
+    font-family: var(--mono); font-size: 9.5px; line-height: 1; color: var(--muted); letter-spacing: 0.01em;
+  }
+  .tag .dot { width: 5px; height: 5px; }
+  .msg-time { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .msg-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; opacity: 0; transition: opacity 140ms var(--ease); }
+  .msg:hover .msg-actions, .msg:focus-within .msg-actions { opacity: 1; }
+  .msg-actions .icon-btn { width: 26px; height: 26px; }
+  .msg-actions .icon-btn .i { width: 14px; height: 14px; }
+  .msg-body { font-size: 14.5px; line-height: 23px; color: var(--text); overflow-wrap: anywhere; }
+  .msg.user .msg-body { width: fit-content; max-width: 88%; margin-left: auto; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; border-bottom-right-radius: 6px; padding: 12px 16px; white-space: pre-wrap; font-size: 14px; line-height: 22px; }
+  .msg.assistant .msg-body { max-width: 100%; }
+  .msg.error .msg-body { border: 1px solid rgba(229, 72, 77, 0.24); background: var(--negative-soft); color: #f0b6b8; border-radius: var(--r-control); padding: 10px 12px; font-size: 13px; line-height: 20px; }
+  .msg-note { display: block; margin-top: 4px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .msg-foot { margin-top: 8px; display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .cursor { display: inline-block; width: 7px; height: 14px; background: var(--accent); vertical-align: -2px; margin-left: 2px; border-radius: 1px; }
+
+  .md > *:first-child { margin-top: 0; }
+  .md > *:last-child { margin-bottom: 0; }
+  .md p { margin: 0 0 12px; }
+  .md h1, .md h2, .md h3 { font-size: 15px; line-height: 22px; font-weight: 500; margin: 20px 0 8px; color: var(--text); }
+  .md h1 { font-size: 17px; line-height: 24px; }
+  .md ul, .md ol { margin: 0 0 12px; padding-left: 20px; }
+  .md li { margin: 4px 0; padding-left: 2px; }
+  .md li::marker { color: var(--muted); }
+  .md strong { font-weight: 600; color: var(--text); }
+  .md em { color: var(--secondary); }
+  .md a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+  .md blockquote { margin: 0 0 12px; padding: 2px 0 2px 14px; border-left: 2px solid var(--line-strong); color: var(--secondary); }
+  .md hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+  .md code { font-family: var(--mono); font-size: 12.5px; background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: #e8d3bb; }
+  .md pre { margin: 0 0 14px; background: var(--deep); border: 1px solid var(--line); border-radius: var(--r-control); overflow: hidden; }
+  .code-head { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--line); background: var(--surface); }
+  .code-lang { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .code-copy { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border-radius: 5px; color: var(--muted); font-family: var(--mono); font-size: 10px; border: 1px solid transparent; }
+  .code-copy:hover { color: var(--text); background: var(--raised); border-color: var(--line); }
+  .code-copy .i { width: 12px; height: 12px; }
+  .md pre code { display: block; padding: 12px 14px; overflow-x: auto; background: none; border: 0; border-radius: 0; font-size: 12.5px; line-height: 20px; color: #cfd5e2; }
+  .md table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+  .md th, .md td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+  .md th { color: var(--muted); font-weight: 500; font-family: var(--mono); font-size: 11px; }
+
+  /* ---------- composer ---------- */
+  .composer-dock { flex: none; padding: 0 32px 14px; background: linear-gradient(to bottom, rgba(11, 13, 20, 0), var(--bg) 18px); }
+  .composer {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel);
+    padding: 10px 10px 8px 14px; transition: border-color 160ms var(--ease), background-color 160ms var(--ease);
+  }
+  .composer:focus-within { border-color: rgba(240, 164, 92, 0.38); background: #12151e; }
+  #prompt {
+    display: block; width: 100%; min-height: 24px; max-height: 168px; resize: none;
+    background: transparent; border: 0; outline: none; padding: 4px 4px 8px 0;
+    font-family: var(--sans); font-size: 14.5px; line-height: 22px; color: var(--text);
+  }
+  #prompt::placeholder { color: var(--muted); }
+  .composer-foot { display: flex; align-items: center; gap: 12px; }
+  .readout { display: flex; align-items: center; gap: 12px; font-size: 10px; line-height: 14px; color: var(--muted); flex-wrap: wrap; min-width: 0; }
+  .readout b { font-weight: 400; color: var(--secondary); }
+  .readout .ro-sep { width: 1px; height: 10px; background: var(--line-strong); }
+  .composer-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+  .kbd-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .kbd-hint kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 3px; color: var(--secondary); }
+  .send-btn {
+    width: 32px; height: 32px; border-radius: var(--r-control); display: grid; place-items: center;
+    background: var(--text); color: var(--bg); border: 1px solid transparent; flex: none;
+    transition: background-color 140ms var(--ease), opacity 140ms var(--ease), transform 120ms var(--ease);
+  }
+  .send-btn:hover { background: #ffffff; }
+  .send-btn:active { transform: scale(0.95); }
+  .send-btn:disabled { background: var(--raised); color: var(--muted); cursor: not-allowed; border-color: var(--line); }
+  .send-btn.is-stop { background: var(--raised); color: var(--text); border-color: var(--line-strong); }
+  .send-btn.is-stop:hover { background: var(--raised-2); }
+  .send-btn .i { width: 15px; height: 15px; stroke-width: 1.5; }
+  .fineprint { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 0 2px; font-family: var(--mono); font-size: 10px; line-height: 14px; color: var(--muted); }
+  .fineprint span:last-child { text-align: right; }
+
+  /* ---------- parameters rail ---------- */
+  .params {
+    width: 340px; flex: 0 0 340px; border-left: 1px solid var(--line); background: var(--deep);
+    display: flex; flex-direction: column; min-height: 0; z-index: 40;
+  }
+  .params-head { height: 56px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); }
+  .params-head-title { display: flex; align-items: baseline; gap: 8px; }
+  .params-head-title strong { font-size: 13px; font-weight: 500; }
+  .params-head-title span { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .params-body { padding: 12px; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); padding: 16px; }
+  .card.tight { padding: 10px; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; min-height: 18px; }
+  .card-label { font-family: var(--mono); font-size: 10.5px; line-height: 16px; color: var(--muted); }
+  .card-link { font-size: 10.5px; color: var(--muted); font-family: var(--mono); height: 20px; display: inline-flex; align-items: center; gap: 4px; padding: 0 4px; border-radius: 4px; }
+  .card-link:hover { color: var(--text); background: var(--raised); }
+  .card-link .i { width: 12px; height: 12px; }
+
+  .gauge { background: var(--surface); }
+  .gauge-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 0 0 8px; }
+  .gauge-main { display: flex; flex-direction: column; gap: 2px; }
+  .gauge-num { width: 126px; background: transparent; border: 0; border-bottom: 1px dashed var(--line-strong); padding: 0 0 2px; margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 32px; line-height: 34px; color: var(--accent); letter-spacing: -0.02em; outline: none; transition: border-color 140ms var(--ease); }
+  .gauge-num:hover { border-color: var(--secondary); }
+  .gauge-num:focus { border-color: var(--accent); }
+  .gauge-sec { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .gauge-token { width: 84px; text-align: right; background: transparent; border: 0; border-bottom: 1px dashed var(--line-strong); padding: 0 0 1px; margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 18px; line-height: 24px; color: var(--text); outline: none; transition: border-color 140ms var(--ease); }
+  .gauge-token:hover { border-color: var(--secondary); }
+  .gauge-token:focus { border-color: var(--accent); }
+  .gauge-cap { font-family: var(--mono); font-size: 9.5px; line-height: 13px; color: var(--muted); }
+  .gauge-main { border: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; cursor: text; }
+  .ruler { width: 100%; height: 28px; display: block; overflow: visible; pointer-events: none; }
+  .ruler-wrap { position: relative; height: 28px; margin-top: 2px; }
+  .ruler-wrap input[type="range"] { position: absolute; inset: 0; width: 100%; height: 28px; margin: 0; }
+  .ruler-wrap input[type="range"]::-webkit-slider-runnable-track { height: 28px; background: transparent; }
+  .ruler-wrap input[type="range"]::-webkit-slider-thumb { width: 12px; height: 18px; margin-top: 5px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 0 1px rgba(7, 8, 13, 0.8), 0 1px 3px rgba(0, 0, 0, 0.5); }
+  .ruler-wrap input[type="range"]:hover::-webkit-slider-thumb { background: #f7bb80; }
+  .ruler-wrap input[type="range"]::-moz-range-track { height: 28px; background: transparent; }
+  .ruler-wrap input[type="range"]::-moz-range-progress { background: transparent; height: 0; }
+  .ruler-wrap input[type="range"]::-moz-range-thumb { width: 12px; height: 18px; border-radius: 3px; background: var(--accent); border: 1px solid rgba(7, 8, 13, 0.8); }
+  .ruler .tick { stroke: var(--line-strong); stroke-width: 1; }
+  .ruler .tick.major { stroke: var(--muted); }
+  .ruler .needle { stroke: var(--accent); stroke-width: 1.5; }
+  .ruler .needle-dot { fill: var(--accent); }
+  .ticks { display: flex; justify-content: space-between; margin-top: -2px; font-family: var(--mono); font-size: 9.5px; line-height: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .budget { height: 3px; border-radius: 2px; background: var(--raised); margin-top: 10px; overflow: hidden; }
+  .budget-fill { display: block; height: 100%; background: var(--secondary); border-radius: 2px; }
+  .gauge-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 10px; color: var(--muted); }
+  .gauge-foot span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gauge-mode { display: inline-flex; align-items: center; gap: 5px; flex: none; }
+  .status { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10px; color: var(--secondary); white-space: nowrap; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .field > span, .field-label { font-size: 11.5px; line-height: 16px; color: var(--secondary); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .field-label b { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--text); font-variant-numeric: tabular-nums; }
+  .field-label .unit { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .input, .select, textarea.input {
+    width: 100%; height: 34px; background: var(--raised); border: 1px solid var(--line);
+    border-radius: 8px; padding: 0 10px; font-family: var(--sans); font-size: 12.5px; color: var(--text);
+    outline: none; transition: border-color 140ms var(--ease), background-color 140ms var(--ease);
+  }
+  .input.mono { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.01em; }
+  .input:hover, .select:hover { border-color: var(--line-strong); }
+  .input:focus, .select:focus { border-color: rgba(240, 164, 92, 0.4); background: #1d222d; }
+  .input::placeholder { color: var(--muted); }
+  textarea.input { height: auto; min-height: 68px; padding: 8px 10px; line-height: 19px; resize: vertical; }
+  .select-wrap { position: relative; }
+  .select { appearance: none; padding-right: 30px; cursor: pointer; }
+  .select-chevron { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+  .select-chevron .i { width: 14px; height: 14px; }
+  .key-row { display: flex; gap: 6px; }
+  .key-row .input { flex: 1; min-width: 0; height: 34px; }
+  .key-row .icon-btn { width: 34px; height: 34px; border: 1px solid var(--line); background: var(--raised); border-radius: 8px; color: var(--muted); flex: none; }
+  .key-row .icon-btn:hover { color: var(--text); border-color: var(--line-strong); background: var(--raised-2); }
+  .key-actions { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .check { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; line-height: 16px; color: var(--secondary); cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 13px; height: 13px; margin: 0; cursor: pointer; }
+  .link-btn { font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 2px 0; border-bottom: 1px solid transparent; }
+  .link-btn:hover { color: var(--text); border-color: var(--line-strong); }
+  .hint { margin-top: 8px; font-size: 11px; line-height: 16px; color: var(--muted); }
+  .hint strong { color: var(--secondary); font-weight: 500; }
+  .addr-row { display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 16px; }
+  .addr-row .i { width: 13px; height: 13px; margin-top: 2px; flex: none; }
+  .addr-row a { color: var(--secondary); text-decoration: underline; text-underline-offset: 2px; }
+  details.advanced { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+  details.advanced summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-family: var(--mono); font-size: 10.5px; color: var(--muted); width: fit-content; padding: 2px 0; }
+  details.advanced summary::-webkit-details-marker { display: none; }
+  details.advanced summary:hover { color: var(--text); }
+  details.advanced summary .i { width: 12px; height: 12px; transition: transform 160ms var(--ease); }
+  details.advanced[open] summary .i { transform: rotate(90deg); }
+  .switchrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+  .switchrow span.sw-label { font-size: 11.5px; color: var(--secondary); display: block; }
+  .switchrow .hint { margin-top: 2px; }
+  .switch { position: relative; flex: none; display: inline-flex; cursor: pointer; }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .switch-track { width: 30px; height: 18px; border-radius: 9px; background: var(--raised); border: 1px solid var(--line-strong); display: block; position: relative; transition: background-color 140ms var(--ease), border-color 140ms var(--ease); }
+  .switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: transform 160ms var(--ease), background-color 160ms var(--ease); }
+  .switch input:checked + .switch-track { background: var(--accent-soft); border-color: rgba(240, 164, 92, 0.5); }
+  .switch input:checked + .switch-track::after { transform: translateX(12px); background: var(--accent); }
+  .switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; background: transparent; margin: 2px 0 0; cursor: pointer; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 2px; border-radius: 2px; background: linear-gradient(to right, var(--accent) 0 var(--p, 50%), rgba(238, 240, 245, 0.16) var(--p, 50%) 100%); }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -5px; border: 0; border-radius: 3px; background: var(--text); box-shadow: 0 0 0 1px rgba(7, 8, 13, 0.7), 0 1px 2px rgba(0, 0, 0, 0.4); transition: background-color 120ms var(--ease), transform 120ms var(--ease); }
+  input[type="range"]:hover::-webkit-slider-thumb { background: #ffffff; }
+  input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
+  input[type="range"]:focus-visible { outline: none; }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { background: var(--accent); box-shadow: 0 0 0 3px rgba(240, 164, 92, 0.24); }
+  input[type="range"]::-moz-range-track { height: 2px; border-radius: 2px; background: rgba(238, 240, 245, 0.16); }
+  input[type="range"]::-moz-range-progress { height: 2px; border-radius: 2px; background: var(--accent); }
+  input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 3px; background: var(--text); }
+  input[type="range"]:focus-visible::-moz-range-thumb { background: var(--accent); }
+  .presets { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .preset { height: 24px; padding: 0 7px; border: 1px solid var(--line); border-radius: 5px; font-family: var(--mono); font-size: 9.5px; color: var(--muted); transition: color 140ms var(--ease), background-color 140ms var(--ease), border-color 140ms var(--ease); }
+  .preset:hover { color: var(--text); background: var(--raised); }
+  .preset.active { color: var(--text); background: var(--raised); border-color: var(--line-strong); }
+  .sampling-block + .sampling-block { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .sampling-hint { margin-top: 8px; font-size: 10.5px; line-height: 15px; color: var(--muted); }
+  .slider-divider { height: 1px; background: var(--line); margin: 14px 0 12px; }
+  .slider-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px; line-height: 16px; color: var(--secondary); }
+  .slider-label b { font-family: var(--mono); font-size: 10.5px; font-weight: 400; color: var(--muted); }
+  .expander { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 8px 4px; color: var(--text); text-align: left; }
+  .expander-title { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 500; }
+  .expander-title .i { width: 14px; height: 14px; color: var(--muted); }
+  .expander-meta { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--muted); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .expander-chevron { width: 14px; height: 14px; padding: 0; color: var(--muted); transition: transform 160ms var(--ease); }
+  .expander[aria-expanded="true"] .expander-chevron { transform: rotate(180deg); }
+  .expander-panel { padding-top: 8px; }
+  .expander-panel textarea { min-height: 62px; }
+  .field.compact { margin-top: 10px; gap: 5px; }
+  .field.compact:first-of-type { margin-top: 0; }
+  .inline-link { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+  .inline-link:hover { color: var(--text); }
+  .label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11.5px; line-height: 16px; color: var(--secondary); }
+  .label-row label { cursor: pointer; }
+  .rail-note { padding: 4px 4px 8px; font-size: 10px; line-height: 15px; color: var(--muted); }
+  .rail-note a { color: var(--secondary); text-decoration: underline; text-underline-offset: 2px; }
+  .rail-note .credit { display: block; margin-top: 6px; }
+
+  /* ---------- overlays ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(4, 5, 9, 0.62); opacity: 0; pointer-events: none; transition: opacity 220ms var(--ease); z-index: 35; }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+  .sidebar-close, .params-close { display: none; }
+
+  dialog.dialog {
+    width: min(580px, calc(100vw - 32px)); max-height: calc(100dvh - 64px); overflow-y: auto;
+    background: var(--surface); color: var(--text); border: 1px solid var(--line-strong);
+    border-radius: var(--r-panel); padding: 24px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  }
+  dialog.dialog::backdrop { background: rgba(4, 5, 9, 0.66); }
+  .dialog-close { position: absolute; top: 14px; right: 14px; }
+  .dialog h2 { font-size: 22px; line-height: 28px; font-weight: 400; letter-spacing: -0.015em; margin-top: 8px; max-width: 420px; }
+  .dialog > p { font-size: 13px; line-height: 20px; color: var(--secondary); margin-top: 10px; }
+  .help-steps { display: flex; flex-direction: column; gap: 0; margin-top: 20px; border-top: 1px solid var(--line); }
+  .help-step { display: grid; grid-template-columns: 24px 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .help-step > span { font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding-top: 2px; }
+  .help-step h3 { font-size: 13px; font-weight: 500; line-height: 20px; }
+  .help-step p { font-size: 12.5px; line-height: 19px; color: var(--secondary); margin-top: 2px; }
+  .dialog h3.section { font-size: 12px; font-weight: 500; color: var(--text); margin: 20px 0 8px; font-family: var(--mono); }
+  .shortcuts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .shortcuts li { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--secondary); }
+  .shortcuts .keys { display: flex; gap: 4px; }
+  kbd { font-family: var(--mono); font-size: 10px; line-height: 1; color: var(--secondary); background: var(--raised); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 3px 5px; }
+  .dialog-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .btn-secondary { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--raised); font-size: 11.5px; color: var(--secondary); }
+  .btn-secondary:hover { color: var(--text); background: var(--raised-2); }
+  .btn-secondary .i { width: 13px; height: 13px; }
+  .credit-line { font-size: 10px; line-height: 15px; color: var(--muted); max-width: 280px; }
+  .credit-line a { color: var(--secondary); text-decoration: underline; text-underline-offset: 2px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 8px);
+    background: var(--raised); border: 1px solid var(--line-strong); color: var(--text);
+    font-family: var(--mono); font-size: 11px; padding: 8px 12px; border-radius: 8px;
+    opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+    z-index: 80; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); max-width: calc(100vw - 32px);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast[data-tone="error"] { border-color: rgba(229, 72, 77, 0.4); color: #f0b6b8; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1279px) {
+    .params {
+      position: fixed; top: 0; right: 0; bottom: 0; width: 352px; max-width: 92vw;
+      transform: translateX(101%); transition: transform 300ms var(--ease);
+      box-shadow: -24px 0 64px rgba(0, 0, 0, 0.45); border-left: 1px solid var(--line-strong);
+      overflow: hidden;
+    }
+    .params-body { padding-bottom: 20px; }
+    .params.open { transform: none; }
+    .params-toggle { display: inline-flex; }
+    .params-close { display: grid; }
+  }
+  @media (max-width: 1023px) {
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 280px; max-width: 88vw;
+      transform: translateX(-101%); transition: transform 300ms var(--ease);
+      box-shadow: 24px 0 64px rgba(0, 0, 0, 0.45); border-right: 1px solid var(--line-strong);
+      z-index: 45;
+    }
+    .sidebar.open { transform: none; }
+    .sidebar-close { display: grid; position: absolute; top: 13px; right: 12px; }
+    .brand-version { display: none; }
+    .topbar { padding-left: 12px; }
+    .sidebar-toggle { display: grid; }
+    .transcript { padding-left: 20px; padding-right: 20px; }
+    .transcript-inner { padding: 0 20px; }
+    .composer-dock { padding: 0 20px 12px; }
+  }
+  @media (min-width: 1024px) { .sidebar-toggle { display: none; } }
+  @media (max-width: 720px) {
+    .topbar { gap: 8px; padding-right: 8px; }
+    .topbar-meta { max-width: 48vw; }
+    .topbar-actions .icon-btn.hide-sm { display: none; }
+    .topbar-sep.hide-sm { display: none; }
+    .transcript { padding-left: 16px; padding-right: 16px; padding-top: 4px; }
+    .transcript-inner { padding: 0 16px; }
+    .composer-dock { padding: 0 12px 10px; }
+    .empty { padding-top: 32px; }
+    .empty h2 { font-size: 26px; line-height: 32px; }
+    .empty-sub { font-size: 14px; line-height: 22px; }
+    .starters { margin-top: 24px; }
+    .msg { padding: 16px 0; }
+    .msg.user .msg-body { max-width: 94%; }
+    .msg-actions { opacity: 1; }
+    .fineprint { flex-direction: column; gap: 2px; }
+    .fineprint span:last-child { text-align: left; }
+    .model-tag-long { display: none; }
+    .mode-chip { display: none; }
+    .composer { padding-left: 12px; }
+    .readout { gap: 8px; }
+    .kbd-hint { display: none; }
+  }
+  @media (hover: none) {
+    .sess-del, .sess-rename { opacity: 0.65; }
+    .msg-actions { opacity: 1; }
+    .sess-time { display: none; }
+  }
+  @media (max-height: 760px) {
+    .params .sampling-hint { display: none; }
+    .params .presets { margin-top: 4px; }
+    .params .gauge-cap { font-size: 9px; }
+  }
+  @media (max-height: 820px) {
+    .params-body { gap: 8px; padding: 10px; }
+    .card { padding: 14px; }
+    .gauge-num { font-size: 28px; line-height: 30px; }
+    .gauge-top { margin-bottom: 6px; }
+    .sampling-hint { margin-top: 6px; font-size: 10px; line-height: 14px; }
+    .presets { margin-top: 6px; }
+    .slider-divider { margin: 10px 0 8px; }
+    .field.compact { margin-top: 8px; }
+    .hint { margin-top: 6px; font-size: 10.5px; line-height: 14px; }
+    .key-actions { margin-top: 6px; }
+    .advanced { margin-top: 8px; padding-top: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body class="llmpg">
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 19V5"/></symbol>
+    <symbol id="i-square" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16M16 16h5v5"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.5 13.5 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3M18.5 4.5l3 3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-corner-down-left" viewBox="0 0 24 24"><path d="M20 4v7a4 4 0 0 1-4 4H4M9 10l-5 5 5 5"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-stop-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><rect x="9" y="9" width="6" height="6" rx="1"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Sessions">
+    <div class="sidebar-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <rect class="frame" x="3" y="3" width="18" height="18" rx="5" stroke-width="1.5"/>
+          <path d="M7 12.5h2.5L11.5 8l2 8 1.8-3.5H18" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </span>
+      <span class="brand-name">LLM Playground</span>
+      <span class="brand-version">v1.0</span>
+      <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Close sessions"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="sidebar-inner">
+      <button class="new-session" id="newChat">
+        <svg class="i"><use href="#i-plus"/></svg>
+        New session
+      </button>
+      <div class="sidebar-label"><span>Sessions</span><span class="mono" id="sessionCount">0</span></div>
+      <div class="session-list" id="sessionList" role="list"></div>
+    </div>
+    <div class="sidebar-foot">
+      <button class="foot-card" id="footCard" aria-label="Open connection parameters">
+        <span class="foot-icon"><svg class="i"><use href="#i-key"/></svg></span>
+        <span class="foot-copy">
+          <span class="foot-mode"><i class="dot" id="footDot"></i><span id="footMode">Preview mode</span></span>
+          <span class="foot-sub" id="footSub">No key set</span>
+        </span>
+        <span class="foot-chevron"><svg class="i"><use href="#i-chevron-right"/></svg></span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <button class="icon-btn sidebar-toggle" id="sidebarToggle" aria-label="Open sessions" aria-controls="sidebar" aria-expanded="false"><svg class="i"><use href="#i-menu"/></svg></button>
+      <div class="topbar-title">
+        <h1 id="chatTitle" title="Double-click to rename">Untitled session</h1>
+        <span class="topbar-meta mono" id="chatMeta">OpenAI <span class="sep">/</span> auto model <span class="sep">/</span> <span>0 messages</span></span>
+      </div>
+      <div class="topbar-actions">
+        <span class="mode-chip" id="modeChip" data-mode="preview"><i class="dot accent"></i><span id="modeChipText">Preview</span></span>
+        <span class="topbar-sep hide-sm"></span>
+        <button class="icon-btn" id="renameChat" aria-label="Rename session" title="Rename session"><svg class="i"><use href="#i-pencil"/></svg></button>
+        <button class="icon-btn hide-sm" id="copyChat" aria-label="Copy transcript" title="Copy transcript"><svg class="i"><use href="#i-copy"/></svg></button>
+        <button class="icon-btn hide-sm" id="exportChat" aria-label="Export session as JSON" title="Export session"><svg class="i"><use href="#i-download"/></svg></button>
+        <button class="icon-btn danger hide-sm" id="clearChat" aria-label="Clear session" title="Clear session"><svg class="i"><use href="#i-trash"/></svg></button>
+        <button class="params-toggle" id="paramsToggle" aria-controls="params" aria-expanded="false"><svg class="i"><use href="#i-sliders"/></svg>Parameters</button>
+        <button class="icon-btn" id="helpBtn" aria-label="How this page works" title="How this works"><svg class="i"><use href="#i-help"/></svg></button>
+      </div>
+    </header>
+
+    <div class="work">
+      <main class="chat">
+        <div class="chat-scroll" id="chatScroll">
+          <div class="transcript">
+            <div class="messages" id="messages" role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text"></div>
+            <div class="empty" id="emptyState">
+              <p class="eyebrow"><svg class="i" style="width:13px;height:13px"><use href="#i-gauge"/></svg>Browser workbench</p>
+              <h2>Run a model, read the output</h2>
+              <p class="empty-sub">Set temperature and output length, send a prompt, and compare what comes back. No model to pick: add a provider key and the page uses whatever model the key can reach.</p>
+              <div class="starters">
+                <button class="starter" data-prompt="Write the same product tagline at temperature 0.2 and 1.4. Then explain what changed between the two versions.">
+                  <svg class="i"><use href="#i-gauge"/></svg>
+                  <span class="starter-copy"><span class="starter-label">Parameter test</span><span class="starter-text">Compare one prompt at two temperatures</span></span>
+                  <svg class="i"><use href="#i-corner-down-left"/></svg>
+                </button>
+                <button class="starter" data-prompt="Turn these meeting notes into five action items with an owner for each: the checkout flow is slow on mobile, three support tickets mention the coupon field, and the team wants a release candidate before Friday.">
+                  <svg class="i"><use href="#i-message"/></svg>
+                  <span class="starter-copy"><span class="starter-label">Structured output</span><span class="starter-text">Turn messy notes into action items</span></span>
+                  <svg class="i"><use href="#i-corner-down-left"/></svg>
+                </button>
+                <button class="starter" data-prompt="Write a JavaScript debounce function with a cancel method, then add one test case that covers rapid calls.">
+                  <svg class="i"><use href="#i-check"/></svg>
+                  <span class="starter-copy"><span class="starter-label">Code review</span><span class="starter-text">Ask for a small utility and a test</span></span>
+                  <svg class="i"><use href="#i-corner-down-left"/></svg>
+                </button>
+              </div>
+              <p class="empty-meta"><i class="dot accent"></i>Preview mode works without a key</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="composer-dock">
+          <div class="transcript-inner">
+            <form class="composer" id="composer">
+              <label class="sr-only" for="prompt">Prompt</label>
+              <textarea id="prompt" rows="1" placeholder="Send a prompt. Shift + Enter for a new line" autocomplete="off"></textarea>
+              <div class="composer-foot">
+                <div class="readout mono">
+                  <span>temp <b id="roTemp">0.70</b></span>
+                  <span class="ro-sep" aria-hidden="true"></span>
+                  <span>max <b id="roMax">512</b></span>
+                  <span class="ro-sep" aria-hidden="true"></span>
+                  <span><b id="roTokens">0</b> est. tokens</span>
+                </div>
+                <div class="composer-actions">
+                  <span class="kbd-hint"><kbd id="sendKey">Enter</kbd> send</span>
+                  <button class="send-btn" id="sendBtn" type="submit" aria-label="Send prompt">
+                    <svg class="i" id="sendIcon"><use href="#i-arrow-up"/></svg>
+                  </button>
+                </div>
+              </div>
+            </form>
+            <p class="fineprint"><span id="composerNote">Preview mode writes a local sample response</span><span>Requests go from this browser to your provider</span></p>
+          </div>
+        </div>
+      </main>
+
+      <aside class="params" id="params" aria-label="Parameters">
+        <div class="params-head">
+          <div class="params-head-title"><strong>Parameters</strong><span>next message</span></div>
+          <div style="display:flex;align-items:center;gap:2px">
+            <button class="icon-btn" id="resetParams" aria-label="Reset sampling parameters" title="Reset sampling parameters"><svg class="i"><use href="#i-refresh"/></svg></button>
+            <button class="icon-btn params-close" id="paramsClose" aria-label="Close parameters"><svg class="i"><use href="#i-x"/></svg></button>
+          </div>
+        </div>
+        <div class="params-body">
+          <section class="card gauge" aria-label="Sampling">
+            <div class="card-head"><span class="card-label">Sampling</span><span class="status mono" id="gaugeProvider">OpenAI</span></div>
+            <div class="gauge-top">
+              <label class="gauge-main" for="gaugeTemp">
+                <input class="gauge-num" id="gaugeTemp" type="text" inputmode="decimal" value="0.70" autocomplete="off" spellcheck="false" aria-label="Temperature, editable" title="Type a temperature or drag the ruler">
+                <span class="gauge-cap">temperature</span>
+              </label>
+              <label class="gauge-sec" for="gaugeTokens">
+                <input class="gauge-token" id="gaugeTokens" type="text" inputmode="numeric" value="512" autocomplete="off" spellcheck="false" aria-label="Maximum output tokens, editable" title="Type a token cap">
+                <span class="gauge-cap">max output tokens</span>
+              </label>
+            </div>
+            <div class="ruler-wrap">
+              <svg class="ruler" id="tempRuler" viewBox="0 0 300 28" preserveAspectRatio="none" aria-hidden="true"></svg>
+              <input type="range" id="temperature" min="0" max="2" step="0.05" value="0.7" aria-label="Temperature" aria-describedby="tempHint">
+            </div>
+            <div class="ticks"><span>0.0</span><span>1.0</span><span>2.0</span></div>
+            <div class="presets" role="group" aria-label="Temperature presets">
+              <button class="preset" type="button" data-temp="0.2">Precise 0.2</button>
+              <button class="preset" type="button" data-temp="0.7">Balanced 0.7</button>
+              <button class="preset" type="button" data-temp="1.2">Expressive 1.2</button>
+            </div>
+            <p class="sampling-hint" id="tempHint">Lower values keep the phrasing steady. Higher values explore more wording.</p>
+            <div class="slider-divider"></div>
+            <label class="slider-label" for="maxTokens"><span>Output length</span><b>Caps the reply</b></label>
+            <input type="range" id="maxTokens" min="64" max="4096" step="64" value="512" aria-describedby="maxHint">
+            <div class="ticks" aria-hidden="true"><span>64</span><span>1K</span><span>2K</span><span>3K</span><span>4K</span></div>
+            <p class="sampling-hint" id="maxHint">One token is roughly four characters of English.</p>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-label">Connection</span><span class="status" id="connStatus"><i class="dot"></i>No key</span></div>
+            <label class="field compact" for="provider">
+              <span>Provider</span>
+              <div class="select-wrap">
+                <select class="select" id="provider">
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="groq">Groq</option>
+                  <option value="mistral">Mistral</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="custom">Custom (OpenAI-compatible)</option>
+                </select>
+                <span class="select-chevron"><svg class="i"><use href="#i-chevron-down"/></svg></span>
+              </div>
+            </label>
+            <div class="field compact">
+              <div class="label-row"><label for="apiKey">API key</label><a href="https://platform.openai.com/api-keys" id="providerDocs" class="inline-link" target="_blank" rel="noopener noreferrer">Get a key</a></div>
+              <span class="key-row">
+                <input class="input mono" id="apiKey" type="password" placeholder="Paste your provider key" autocomplete="off" spellcheck="false" aria-describedby="keyHint">
+                <button class="icon-btn" id="toggleKey" type="button" aria-label="Show API key" title="Show key"><svg class="i" id="keyEyeIcon"><use href="#i-eye"/></svg></button>
+              </span>
+            </div>
+            <div class="key-actions">
+              <label class="check"><input type="checkbox" id="rememberKey">Remember on this device</label>
+              <button class="link-btn" id="clearKey" type="button">Clear</button>
+            </div>
+            <p class="hint" id="keyHint">Paste a key to go live. The page uses whichever model the key can reach. No key means a local sample.</p>
+            <details class="advanced" id="advanced">
+              <summary><svg class="i"><use href="#i-chevron-right"/></svg>Advanced</summary>
+              <label class="field compact" for="baseUrl">
+                <span>API base URL</span>
+                <input class="input mono" id="baseUrl" spellcheck="false" autocomplete="off">
+              </label>
+              <div class="switchrow">
+                <div><span class="sw-label">Stream response</span><p class="hint">Render text as it arrives</p></div>
+                <label class="switch"><input type="checkbox" id="streamToggle" checked aria-label="Stream response"><span class="switch-track"></span></label>
+              </div>
+            </details>
+          </section>
+
+          <section class="card tight">
+            <button class="expander" id="systemToggle" type="button" aria-expanded="false" aria-controls="systemPanel">
+              <span class="expander-title"><svg class="i"><use href="#i-message"/></svg>System prompt</span>
+              <span class="expander-meta" id="systemMeta">Default</span>
+              <svg class="i expander-chevron"><use href="#i-chevron-down"/></svg>
+            </button>
+            <div class="expander-panel" id="systemPanel" hidden>
+              <label class="sr-only" for="systemPrompt">System prompt</label>
+              <textarea class="input" id="systemPrompt" rows="3" spellcheck="true" placeholder="Set the model's role and constraints"></textarea>
+              <div class="key-actions">
+                <span class="hint">Sent first on every request</span>
+                <button class="link-btn" id="resetSystem" type="button">Clear</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<dialog class="dialog" id="helpDialog" aria-labelledby="helpTitle">
+  <button class="icon-btn dialog-close" id="helpClose" aria-label="Close help"><svg class="i"><use href="#i-x"/></svg></button>
+  <p class="eyebrow"><svg class="i" style="width:13px;height:13px"><use href="#i-gauge"/></svg>LLM Playground</p>
+  <h2 id="helpTitle">A small workbench for model parameters</h2>
+  <p>This page sends prompts to the provider you configure. It does not ship with a key, a proxy, or a server. Everything is one HTML file and your browser.</p>
+  <div class="help-steps">
+    <div class="help-step"><span>01</span><div><h3>Pick a provider and paste a key</h3><p>Open Parameters, choose a provider, and paste a key into the API key field. There is no model to choose: the page asks the provider which model the key can use. A base URL in Advanced points at any OpenAI-compatible endpoint.</p></div></div>
+    <div class="help-step"><span>02</span><div><h3>Set temperature and length</h3><p>The sampling card is one control. Drag the ruler, tap a preset, or type into the temperature figure. Max output tokens is in the same card. Both values travel with the next request.</p></div></div>
+    <div class="help-step"><span>03</span><div><h3>Send and compare</h3><p>Press Enter to send and Shift + Enter for a new line. Stop a reply while it streams, retry the last one, copy a response, or export the session as JSON. Rename a session with the pencil next to it, or double-click its title; Enter saves, Esc cancels.</p></div></div>
+  </div>
+  <h3 class="section">Keyboard</h3>
+  <ul class="shortcuts">
+    <li><span>Send prompt</span><span class="keys"><kbd>Enter</kbd></span></li>
+    <li><span>New line</span><span class="keys"><kbd>Shift</kbd><kbd>Enter</kbd></span></li>
+    <li><span>Rename session</span><span class="keys"><kbd>F2</kbd></span></li>
+    <li><span>Close a panel</span><span class="keys"><kbd>Esc</kbd></span></li>
+  </ul>
+  <h3 class="section">About keys and browser requests</h3>
+  <p class="hint">Your key is kept in session storage, or in local storage only when you tick Remember on this device. It is never placed in the page source or in exported files. The page asks your provider for an available model and falls back to a known default if the provider does not expose a list. Some providers block direct browser calls through CORS; if a request fails before reaching the provider, try OpenRouter or a proxy you control. Gemini and Anthropic keys are sent from this page as documented by those providers.</p>
+  <div class="dialog-foot">
+    <button class="btn-secondary" id="clearData" type="button"><svg class="i"><use href="#i-trash"/></svg>Clear local data</button>
+    <span class="credit-line">Interface direction follows <a href="https://github.com/heydamir/unslop" target="_blank" rel="noopener noreferrer">unslop</a> by Damir Sokolovsky, CC BY 4.0</span>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="sr-only" id="liveStatus" aria-live="polite"></div>
+<script>
+(() => {
+  "use strict";
+
+  /* ---------------- providers ---------------- */
+  const PROVIDERS = {
+    openai: {
+      label: "OpenAI",
+      short: "OpenAI",
+      kind: "openai",
+      base: "https://api.openai.com/v1",
+      docs: "https://platform.openai.com/api-keys",
+      models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o4-mini"]
+    },
+    anthropic: {
+      label: "Anthropic",
+      short: "Anthropic",
+      kind: "anthropic",
+      base: "https://api.anthropic.com/v1/messages",
+      docs: "https://console.anthropic.com/settings/keys",
+      models: ["claude-sonnet-4-5", "claude-haiku-4-5", "claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"]
+    },
+    gemini: {
+      label: "Google Gemini",
+      short: "Gemini",
+      kind: "gemini",
+      base: "https://generativelanguage.googleapis.com/v1beta",
+      docs: "https://aistudio.google.com/app/apikey",
+      models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
+    },
+    groq: {
+      label: "Groq",
+      short: "Groq",
+      kind: "openai",
+      base: "https://api.groq.com/openai/v1",
+      docs: "https://console.groq.com/keys",
+      models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-20b", "openai/gpt-oss-120b"]
+    },
+    mistral: {
+      label: "Mistral",
+      short: "Mistral",
+      kind: "openai",
+      base: "https://api.mistral.ai/v1",
+      docs: "https://console.mistral.ai/api-keys/",
+      models: ["mistral-small-latest", "mistral-large-latest", "open-mistral-nemo"]
+    },
+    openrouter: {
+      label: "OpenRouter",
+      short: "OpenRouter",
+      kind: "openai",
+      base: "https://openrouter.ai/api/v1",
+      docs: "https://openrouter.ai/keys",
+      models: ["openai/gpt-4o-mini", "anthropic/claude-sonnet-4.5", "google/gemini-2.5-flash", "meta-llama/llama-3.3-70b-instruct"]
+    },
+    custom: {
+      label: "Custom endpoint",
+      short: "Custom",
+      kind: "openai",
+      base: "",
+      docs: "https://platform.openai.com/docs/api-reference/chat",
+      models: ["gpt-4o-mini", "llama-3.3-70b-versatile", "mistral-small-latest"]
+    }
+  };
+
+  const DEFAULT_CFG = {
+    provider: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    temperature: 0.7,
+    maxTokens: 512,
+    system: "You are a precise, helpful assistant. Use plain language, short paragraphs, and markdown when structure helps.",
+    stream: true
+  };
+
+  const K = {
+    cfg: "llmpg.config.v1",
+    chats: "llmpg.chats.v1",
+    active: "llmpg.active.v1",
+    key: "llmpg.key.v1",
+    remember: "llmpg.remember.v1"
+  };
+
+  /* No model picker. Each provider has a safe fallback, and the page asks the
+     provider for a usable model first, so whatever the key can access is used. */
+  const FALLBACK_MODELS = {
+    openai: "gpt-4o-mini",
+    anthropic: "claude-3-5-haiku-latest",
+    gemini: "gemini-2.5-flash",
+    groq: "llama-3.3-70b-versatile",
+    mistral: "mistral-small-latest",
+    openrouter: "openai/gpt-4o-mini",
+    custom: "gpt-4o-mini"
+  };
+  const modelCache = new Map();
+  const modelCacheKey = () => (state.cfg.provider || "openai") + "|" + (state.cfg.baseUrl || "");
+
+  const local = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
+  };
+  const session = {
+    get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) { /* ignore */ } },
+    del(k) { try { sessionStorage.removeItem(k); } catch (e) { /* ignore */ } }
+  };
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const uid = () => (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
+  const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+  const sleep = (ms, signal) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => { if (signal && signal.aborted) reject(new DOMException("Aborted", "AbortError")); else resolve(); }, ms);
+    if (signal) signal.addEventListener("abort", () => { clearTimeout(t); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
+  });
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function estimateTokens(text) {
+    const t = String(text || "").trim();
+    return t ? Math.ceil(t.length / 4) : 0;
+  }
+
+  function formatClock(ts) {
+    try {
+      return new Date(ts).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+    } catch (e) { return ""; }
+  }
+
+  function relativeTime(ts) {
+    const diff = Math.max(0, Date.now() - Number(ts || Date.now()));
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return "now";
+    if (m < 60) return m + "m";
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + "h";
+    const d = Math.floor(h / 24);
+    if (d < 7) return d + "d";
+    try { return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
+    catch (e) { return ""; }
+  }
+
+  /* ---------------- state ---------------- */
+  const state = {
+    cfg: { ...DEFAULT_CFG },
+    chats: [],
+    activeId: null,
+    key: "",
+    streaming: false,
+    controller: null,
+    preview: false,
+    streamMsgId: null,
+    renamingId: null,
+    raf: null,
+    toastTimer: null,
+    saveTimer: null
+  };
+
+  const els = {
+    sidebar: $("#sidebar"), scrim: $("#scrim"), params: $("#params"),
+    sessionList: $("#sessionList"), sessionCount: $("#sessionCount"),
+    newChat: $("#newChat"), footCard: $("#footCard"),
+    chatTitle: $("#chatTitle"), chatMeta: $("#chatMeta"),
+    messages: $("#messages"), emptyState: $("#emptyState"), chatScroll: $("#chatScroll"),
+    composer: $("#composer"), prompt: $("#prompt"), sendBtn: $("#sendBtn"), sendIcon: $("#sendIcon"),
+    roTemp: $("#roTemp"), roMax: $("#roMax"), roTokens: $("#roTokens"),
+    composerNote: $("#composerNote"), modeChip: $("#modeChip"), modeChipText: $("#modeChipText"),
+    temperature: $("#temperature"), maxTokens: $("#maxTokens"), systemPrompt: $("#systemPrompt"),
+    tempHint: $("#tempHint"),
+    provider: $("#provider"), baseUrl: $("#baseUrl"),
+    apiKey: $("#apiKey"), toggleKey: $("#toggleKey"), keyEyeIcon: $("#keyEyeIcon"),
+    rememberKey: $("#rememberKey"), clearKey: $("#clearKey"), keyHint: $("#keyHint"),
+    connStatus: $("#connStatus"), gaugeProvider: $("#gaugeProvider"), gaugeTemp: $("#gaugeTemp"),
+    gaugeTokens: $("#gaugeTokens"),
+    tempRuler: $("#tempRuler"), providerDocs: $("#providerDocs"),
+    systemToggle: $("#systemToggle"), systemPanel: $("#systemPanel"), systemMeta: $("#systemMeta"),
+    streamToggle: $("#streamToggle"), footMode: $("#footMode"), footSub: $("#footSub"), footDot: $("#footDot"),
+    helpDialog: $("#helpDialog"), toast: $("#toast"), liveStatus: $("#liveStatus"),
+    sidebarToggle: $("#sidebarToggle"), paramsToggle: $("#paramsToggle"),
+    sidebarClose: $("#sidebarClose"), paramsClose: $("#paramsClose")
+  };
+
+  /* ---------------- persistence ---------------- */
+  function normalizeConfig(raw) {
+    const cfg = { ...DEFAULT_CFG };
+    if (!raw || typeof raw !== "object") return cfg;
+    if (PROVIDERS[raw.provider]) cfg.provider = raw.provider;
+    const preset = PROVIDERS[cfg.provider];
+    if (typeof raw.baseUrl === "string") cfg.baseUrl = raw.baseUrl.trim().slice(0, 300) || preset.base;
+    const temp = Number(raw.temperature);
+    if (Number.isFinite(temp)) cfg.temperature = clamp(Math.round(temp * 100) / 100, 0, 2);
+    const maxTok = Number(raw.maxTokens);
+    if (Number.isFinite(maxTok)) cfg.maxTokens = clamp(Math.round(maxTok), 64, 4096);
+    if (typeof raw.system === "string") cfg.system = raw.system.slice(0, 4000);
+    if (typeof raw.stream === "boolean") cfg.stream = raw.stream;
+    return cfg;
+  }
+
+  function normalizeMessage(m) {
+    if (!m || typeof m !== "object") return null;
+    if (m.role !== "user" && m.role !== "assistant") return null;
+    const out = {
+      id: typeof m.id === "string" ? m.id : uid(),
+      role: m.role,
+      content: typeof m.content === "string" ? m.content : "",
+      ts: Number(m.ts) || Date.now(),
+      model: typeof m.model === "string" ? m.model : "",
+      provider: typeof m.provider === "string" ? m.provider : "",
+      demo: Boolean(m.demo),
+      stopped: Boolean(m.stopped),
+      error: Boolean(m.error),
+      errorDetail: typeof m.errorDetail === "string" ? m.errorDetail : "",
+      errorHint: typeof m.errorHint === "string" ? m.errorHint : ""
+    };
+    if (m.stats && typeof m.stats === "object") {
+      out.stats = {
+        ms: Number(m.stats.ms) || 0,
+        tokens: Number(m.stats.tokens) || 0,
+        firstMs: Number(m.stats.firstMs) || 0
+      };
+    }
+    return out;
+  }
+
+  function normalizeChat(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const messages = Array.isArray(raw.messages)
+      ? raw.messages.map(normalizeMessage).filter(Boolean).slice(-80)
+      : [];
+    const chat = {
+      id: typeof raw.id === "string" ? raw.id : uid(),
+      title: typeof raw.title === "string" && raw.title.trim() ? raw.title.trim().slice(0, 80) : "Untitled session",
+      createdAt: Number(raw.createdAt) || Date.now(),
+      updatedAt: Number(raw.updatedAt) || Number(raw.createdAt) || Date.now(),
+      messages
+    };
+    return chat;
+  }
+
+  function loadState() {
+    let cfg = { ...DEFAULT_CFG };
+    try {
+      const raw = JSON.parse(local.get(K.cfg) || "null");
+      cfg = normalizeConfig(raw);
+    } catch (e) { cfg = { ...DEFAULT_CFG }; }
+    state.cfg = cfg;
+
+    try {
+      const rawChats = JSON.parse(local.get(K.chats) || "[]");
+      if (Array.isArray(rawChats)) state.chats = rawChats.map(normalizeChat).filter(Boolean).slice(0, 40);
+    } catch (e) { state.chats = []; }
+
+    if (!state.chats.length) {
+      const fresh = newChatObject();
+      state.chats = [fresh];
+    }
+    const storedActive = local.get(K.active);
+    state.activeId = state.chats.some((c) => c.id === storedActive) ? storedActive : state.chats[0].id;
+
+    const remembered = local.get(K.remember) === "1" ? local.get(K.key) : null;
+    state.key = remembered || session.get(K.key) || "";
+    els.rememberKey.checked = Boolean(remembered);
+  }
+
+  function persistConfig() {
+    local.set(K.cfg, JSON.stringify(state.cfg));
+  }
+
+  function persistChats() {
+    try { local.set(K.chats, JSON.stringify(state.chats)); }
+    catch (e) { toast("Could not save this session in the browser", "error"); }
+    local.set(K.active, state.activeId || "");
+  }
+
+  function persistKey() {
+    const value = state.key || "";
+    if (!value.trim()) {
+      local.del(K.key); local.del(K.remember); session.del(K.key);
+      return;
+    }
+    if (els.rememberKey.checked) {
+      local.set(K.key, value); local.set(K.remember, "1"); session.del(K.key);
+    } else {
+      session.set(K.key, value); local.del(K.key); local.del(K.remember);
+    }
+  }
+
+  /* ---------------- chat helpers ---------------- */
+  function newChatObject() {
+    const now = Date.now();
+    return { id: uid(), title: "Untitled session", createdAt: now, updatedAt: now, messages: [] };
+  }
+
+  function activeChat() {
+    let chat = state.chats.find((c) => c.id === state.activeId);
+    if (!chat) {
+      chat = newChatObject();
+      state.chats.unshift(chat);
+      state.activeId = chat.id;
+    }
+    return chat;
+  }
+
+  function titleFromPrompt(text) {
+    const clean = String(text).replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
+    if (!clean) return "Untitled session";
+    return clean.length > 46 ? clean.slice(0, 46).trimEnd() + "…" : clean;
+  }
+
+  function hasKey() { return Boolean((state.key || "").trim()); }
+  function providerConfig() { return PROVIDERS[state.cfg.provider] || PROVIDERS.openai; }
+
+  function toast(message, tone) {
+    els.toast.textContent = message;
+    els.toast.dataset.tone = tone === "error" ? "error" : "default";
+    els.toast.classList.add("show");
+    clearTimeout(state.toastTimer);
+    state.toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2800);
+  }
+
+  async function copyText(text, message) {
+    const value = String(text == null ? "" : text);
+    if (!value) { toast("Nothing to copy", "error"); return; }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = value;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        area.remove();
+      }
+      toast(message || "Copied");
+    } catch (e) {
+      toast("Copy was blocked by this browser", "error");
+    }
+  }
+
+  /* ---------------- markdown ---------------- */
+  function inlineMd(text) {
+    return text
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  }
+
+  function renderMarkdown(source) {
+    const blocks = [];
+    let body = String(source == null ? "" : source).replace(/```([\w+#.-]*)\r?\n?([\s\S]*?)```/g, (match, lang, code) => {
+      blocks.push({ lang: lang || "text", code: code.replace(/\r/g, "") });
+      return "\n\n@@CODE" + (blocks.length - 1) + "@@\n\n";
+    });
+
+    let html = escapeHtml(body);
+    const inlines = [];
+    html = html.replace(/`([^`\n]+)`/g, (match, code) => {
+      inlines.push(code);
+      return "@@IC" + (inlines.length - 1) + "@@";
+    });
+
+    const lines = html.split("\n");
+    const out = [];
+    let para = [];
+    let list = null;
+    const closePara = () => {
+      if (para.length) { out.push("<p>" + para.map(inlineMd).join("<br>") + "</p>"); para = []; }
+    };
+    const closeList = () => {
+      if (list) {
+        out.push("<" + list.type + ">" + list.items.map((item) => "<li>" + inlineMd(item) + "</li>").join("") + "</" + list.type + ">");
+        list = null;
+      }
+    };
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) { closePara(); closeList(); continue; }
+      let m;
+      if ((m = line.match(/^@@CODE(\d+)@@$/))) {
+        closePara(); closeList();
+        const block = blocks[Number(m[1])];
+        if (block) {
+          out.push('<div class="code-block" style="margin:0 0 14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--deep)">'
+            + '<div class="code-head"><span class="code-lang">' + escapeHtml(block.lang) + '</span>'
+            + '<button class="code-copy" type="button"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>'
+            + '<pre style="margin:0;border:0;border-radius:0;background:transparent"><code>' + escapeHtml(block.code.replace(/\n$/, "")) + '</code></pre></div>');
+        }
+        continue;
+      }
+      if ((m = line.match(/^(#{1,3})\s+(.*)$/))) {
+        closePara(); closeList();
+        const level = m[1].length;
+        out.push("<h" + level + ">" + inlineMd(m[2]) + "</h" + level + ">");
+        continue;
+      }
+      if (/^(-{3,}|\*{3,})$/.test(line)) { closePara(); closeList(); out.push("<hr>"); continue; }
+      if ((m = line.match(/^&gt;\s?(.*)$/))) { closePara(); closeList(); out.push("<blockquote>" + inlineMd(m[1]) + "</blockquote>"); continue; }
+      if ((m = line.match(/^[-*]\s+(.*)$/))) {
+        closePara();
+        if (list && list.type === "ul") list.items.push(m[1]);
+        else { closeList(); list = { type: "ul", items: [m[1]] }; }
+        continue;
+      }
+      if ((m = line.match(/^\d+\.\s+(.*)$/))) {
+        closePara();
+        if (list && list.type === "ol") list.items.push(m[1]);
+        else { closeList(); list = { type: "ol", items: [m[1]] }; }
+        continue;
+      }
+      para.push(line);
+    }
+    closePara(); closeList();
+
+    let result = out.join("");
+    inlines.forEach((code, i) => { result = result.split("@@IC" + i + "@@").join("<code>" + code + "</code>"); });
+    return result;
+  }
+
+  /* ---------------- ui sync ---------------- */
+  function temperatureWord(value) {
+    if (value < 0.4) return "Focused";
+    if (value < 0.95) return "Balanced";
+    if (value < 1.5) return "Expressive";
+    return "Loose";
+  }
+
+  function temperatureHint(value) {
+    if (value < 0.4) return temperatureWord(value) + ". Good for extraction, classification and repeatable checks.";
+    if (value < 0.95) return temperatureWord(value) + ". A little variation without drifting from the prompt.";
+    if (value < 1.5) return temperatureWord(value) + ". More phrasing variety and less predictable structure.";
+    return temperatureWord(value) + ". Useful for brainstorming. Expect drift and retries.";
+  }
+
+  function setRangeFill(el, percent) {
+    if (el) el.style.setProperty("--p", clamp(percent, 0, 100).toFixed(2) + "%");
+  }
+
+  function renderRuler(value) {
+    const W = 300, H = 28;
+    let parts = "";
+    for (let i = 0; i <= 40; i++) {
+      const x = (i / 40) * W;
+      const major = i % 10 === 0;
+      const mid = i % 5 === 0;
+      const top = major ? 6 : mid ? 11 : 15;
+      parts += '<line class="tick' + (major ? " major" : "") + '" x1="' + x + '" x2="' + x + '" y1="' + top + '" y2="24"/>';
+    }
+    els.tempRuler.innerHTML = parts;
+  }
+
+  function renderGauge() {
+    const cfg = state.cfg;
+    const provider = providerConfig();
+    els.gaugeProvider.textContent = provider.short;
+    if (document.activeElement !== els.gaugeTemp) els.gaugeTemp.value = cfg.temperature.toFixed(2);
+    if (document.activeElement !== els.gaugeTokens) els.gaugeTokens.value = String(cfg.maxTokens);
+    els.roTemp.textContent = cfg.temperature.toFixed(2);
+    els.roMax.textContent = String(cfg.maxTokens);
+    els.tempHint.textContent = temperatureHint(cfg.temperature);
+    renderRuler(cfg.temperature);
+    els.temperature.value = String(cfg.temperature);
+    els.maxTokens.value = String(cfg.maxTokens);
+    setRangeFill(els.temperature, (cfg.temperature / 2) * 100);
+    setRangeFill(els.maxTokens, ((cfg.maxTokens - 64) / (4096 - 64)) * 100);
+
+    $$(".preset").forEach((btn) => {
+      const value = Number(btn.dataset.temp);
+      btn.classList.toggle("active", Math.abs(value - cfg.temperature) < 0.001);
+    });
+  }
+
+  function updateSystemMeta() {
+    const value = state.cfg.system.trim().replace(/\s+/g, " ");
+    if (!els.systemMeta) return;
+    els.systemMeta.textContent = value ? (value.length > 22 ? value.slice(0, 22) + "…" : value) : "Default";
+  }
+
+  function renderConnection() {
+    const cfg = state.cfg;
+    const provider = providerConfig();
+    const live = hasKey();
+    els.connStatus.innerHTML = '<i class="dot ' + (live ? "positive" : "") + '"></i>' + (live ? "Key set" : "No key");
+    els.modeChip.dataset.mode = live ? "live" : "preview";
+    els.modeChip.querySelector(".dot").className = "dot " + (live ? "positive" : "accent");
+    els.modeChipText.textContent = live ? "Live" : "Preview";
+    els.footMode.textContent = live ? "Key set" : "Preview mode";
+    els.footDot.className = "dot " + (live ? "positive" : "");
+    els.footSub.textContent = live ? provider.label + " · auto model" : "No key set";
+    els.composerNote.textContent = live
+      ? "Sending to " + provider.label + (cfg.stream ? " · streaming" : "")
+      : "Preview mode writes a local sample response";
+    els.keyHint.innerHTML = live
+      ? 'Key loaded. Requests go from this browser straight to <strong>' + escapeHtml(provider.label) + '</strong>. The provider decides which model serves them.'
+      : 'Paste a key to go live. The page uses whichever model the key can reach. No key means a local sample.';
+    els.providerDocs.href = provider.docs;
+    els.providerDocs.textContent = "Get a key";
+    document.title = "LLM Playground — " + (live ? provider.label + " live" : "preview mode");
+  }
+
+  function syncProviderFields() {
+    const provider = providerConfig();
+    els.provider.value = state.cfg.provider;
+    els.baseUrl.value = state.cfg.baseUrl;
+    els.baseUrl.placeholder = provider.base || "https://api.example.com/v1";
+    els.streamToggle.checked = state.cfg.stream;
+    els.systemPrompt.value = state.cfg.system;
+    els.apiKey.value = state.key;
+    updateSystemMeta();
+  }
+
+  function syncAllUI() {
+    syncProviderFields();
+    renderGauge();
+    renderConnection();
+    renderSidebar();
+    renderHeader();
+    renderMessages();
+    updateEstimate();
+    updateSendState();
+  }
+
+  function renderSidebar() {
+    if (state.renamingId) return;
+    const list = state.chats.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    els.sessionCount.textContent = String(list.length);
+    els.sessionList.innerHTML = "";
+    list.forEach((chat) => {
+      const row = document.createElement("div");
+      row.className = "sess" + (chat.id === state.activeId ? " active" : "");
+      row.dataset.id = chat.id;
+      row.setAttribute("role", "button");
+      row.setAttribute("tabindex", "0");
+      row.setAttribute("aria-current", chat.id === state.activeId ? "true" : "false");
+      row.setAttribute("aria-label", "Open session " + chat.title);
+
+      const title = document.createElement("span");
+      title.className = "sess-title";
+      title.textContent = chat.title;
+      title.title = "Double-click to rename";
+      const time = document.createElement("span");
+      time.className = "sess-time";
+      time.textContent = relativeTime(chat.updatedAt);
+      const rename = document.createElement("button");
+      rename.type = "button";
+      rename.className = "sess-rename";
+      rename.dataset.rename = chat.id;
+      rename.setAttribute("aria-label", "Rename session " + chat.title);
+      rename.title = "Rename session";
+      rename.innerHTML = '<svg class="i"><use href="#i-pencil"/></svg>';
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "sess-del";
+      del.dataset.del = chat.id;
+      del.setAttribute("aria-label", "Delete session " + chat.title);
+      del.innerHTML = '<svg class="i"><use href="#i-trash"/></svg>';
+
+      row.append(title, time, rename, del);
+      els.sessionList.appendChild(row);
+    });
+  }
+
+  function renderHeader() {
+    const chat = activeChat();
+    const provider = providerConfig();
+    const count = chat.messages.length;
+    els.chatTitle.textContent = chat.title;
+    els.chatTitle.title = chat.title;
+    els.chatMeta.innerHTML = escapeHtml(provider.label) + ' <span class="sep">/</span> auto model'
+      + ' <span class="sep">/</span> <span>' + count + (count === 1 ? " message" : " messages") + "</span>";
+  }
+
+  function messageElement(message, chat) {
+    const wrap = document.createElement("article");
+    wrap.className = "msg " + message.role + (message.error ? " error" : "");
+    wrap.dataset.id = message.id;
+    wrap.setAttribute("aria-label", message.role === "user" ? "Your message" : "Assistant message");
+
+    const head = document.createElement("div");
+    head.className = "msg-head";
+
+    const role = document.createElement("span");
+    role.className = "msg-role " + (message.role === "assistant" ? "assistant" : "");
+    role.textContent = message.role === "user" ? "You" : "Assistant";
+    head.appendChild(role);
+
+    if (message.role === "assistant" && message.demo) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.innerHTML = '<i class="dot accent"></i>Preview';
+      tag.title = "Written locally by this page, not by a model";
+      head.appendChild(tag);
+    }
+    if (message.role === "assistant" && message.pending) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.innerHTML = '<i class="dot"></i>Waiting';
+      head.appendChild(tag);
+    }
+    if (message.role === "assistant" && message.stopped && !message.pending) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = "Stopped";
+      head.appendChild(tag);
+    }
+
+    const time = document.createElement("span");
+    time.className = "msg-time";
+    time.textContent = formatClock(message.ts);
+    head.appendChild(time);
+
+    const actions = document.createElement("div");
+    actions.className = "msg-actions";
+    if (message.content && !message.pending) {
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "icon-btn";
+      copyBtn.dataset.act = "copy";
+      copyBtn.setAttribute("aria-label", "Copy message");
+      copyBtn.title = "Copy message";
+      copyBtn.innerHTML = '<svg class="i"><use href="#i-copy"/></svg>';
+      actions.appendChild(copyBtn);
+    }
+    const isLastAssistant = chat.messages[chat.messages.length - 1] && chat.messages[chat.messages.length - 1].id === message.id;
+    if (message.role === "assistant" && isLastAssistant && !message.pending) {
+      const retryBtn = document.createElement("button");
+      retryBtn.type = "button";
+      retryBtn.className = "icon-btn";
+      retryBtn.dataset.act = "retry";
+      retryBtn.setAttribute("aria-label", "Retry last prompt");
+      retryBtn.title = "Retry last prompt";
+      retryBtn.innerHTML = '<svg class="i"><use href="#i-refresh"/></svg>';
+      actions.appendChild(retryBtn);
+    }
+    if (actions.childElementCount) head.appendChild(actions);
+
+    const body = document.createElement("div");
+    body.className = "msg-body" + (message.role === "assistant" ? " md" : "");
+
+    if (message.role === "user") {
+      body.textContent = message.content;
+    } else if (message.error) {
+      body.innerHTML = (message.content ? renderMarkdown(message.content) + "<hr>" : "")
+        + "<strong>Request failed</strong><br>" + escapeHtml(message.errorDetail || "The provider returned an error")
+        + '<span class="msg-note">' + escapeHtml(message.errorHint || "Check the key and base URL in Parameters") + "</span>";
+    } else if (message.pending && !message.content) {
+      body.innerHTML = '<span class="msg-note">Waiting for the first token</span>';
+    } else {
+      body.innerHTML = renderMarkdown(message.content) + (message.pending ? '<span class="cursor" aria-hidden="true"></span>' : "");
+    }
+
+    if (message.stats && !message.pending) {
+      const foot = document.createElement("div");
+      foot.className = "msg-foot";
+      const parts = [];
+      if (message.stats.tokens) parts.push("~" + message.stats.tokens + " tokens");
+      if (message.stats.ms) parts.push(formatDuration(message.stats.ms));
+      foot.textContent = parts.join(" · ");
+      wrap.append(head, body, foot);
+    } else {
+      wrap.append(head, body);
+    }
+    return wrap;
+  }
+
+  function formatDuration(ms) {
+    if (!ms) return "";
+    return ms < 1000 ? Math.round(ms) + " ms" : (ms / 1000).toFixed(1) + " s";
+  }
+
+  function renderMessages() {
+    const chat = activeChat();
+    const scroll = els.chatScroll;
+    const stick = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 180;
+    els.messages.innerHTML = "";
+    chat.messages.forEach((message) => els.messages.appendChild(messageElement(message, chat)));
+    els.emptyState.style.display = chat.messages.length ? "none" : "block";
+    if (stick) scroll.scrollTop = scroll.scrollHeight;
+    updateEstimate();
+  }
+
+  function updateStreamingNode(message) {
+    const node = els.messages.querySelector('[data-id="' + message.id + '"] .msg-body');
+    if (!node) { renderMessages(); return; }
+    node.innerHTML = renderMarkdown(message.content) + '<span class="cursor" aria-hidden="true"></span>';
+    const scroll = els.chatScroll;
+    if (scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 180) scroll.scrollTop = scroll.scrollHeight;
+    updateEstimate();
+  }
+
+  function scheduleStreamRender(message) {
+    if (state.raf) return;
+    state.raf = requestAnimationFrame(() => {
+      state.raf = null;
+      updateStreamingNode(message);
+    });
+  }
+
+  function updateEstimate() {
+    const chat = activeChat();
+    if (!chat) return;
+    const recent = chat.messages.filter((m) => !m.error).slice(-14);
+    const draft = els.prompt ? estimateTokens(els.prompt.value) : 0;
+    const total = recent.reduce((sum, m) => sum + estimateTokens(m.content), 0) + estimateTokens(state.cfg.system) + draft;
+    els.roTokens.textContent = String(total);
+  }
+
+  function updateSendState() {
+    const stop = state.streaming;
+    els.sendBtn.classList.toggle("is-stop", stop);
+    els.sendIcon.innerHTML = '<use href="#' + (stop ? "i-square" : "i-arrow-up") + '"/>';
+    els.sendBtn.setAttribute("aria-label", stop ? "Stop generating" : "Send prompt");
+    els.sendBtn.title = stop ? "Stop generating" : "Send prompt";
+    els.sendBtn.disabled = stop ? false : !els.prompt.value.trim();
+  }
+
+  function autoGrow() {
+    els.prompt.style.height = "auto";
+    els.prompt.style.height = Math.min(168, Math.max(24, els.prompt.scrollHeight)) + "px";
+  }
+
+  /* ---------------- preview mode ---------------- */
+  function previewReply(prompt) {
+    const cfg = state.cfg;
+    const provider = providerConfig();
+    const temp = cfg.temperature.toFixed(2);
+    const word = temperatureWord(cfg.temperature).toLowerCase();
+    const p = prompt.toLowerCase();
+    const header = "> Preview · this reply was written locally by the page. Add a " + provider.label
+      + " key in Parameters to send the prompt to the model your provider serves.";
+    let body = "";
+
+    if (/(temperature|sampling|top[- ]?p|determin|repeatab|creative)/.test(p)) {
+      body = "**How temperature changes a reply**\n\n"
+        + "Temperature " + temp + " is a " + word + " setting. It changes how the next request picks each token, not the prompt itself.\n\n"
+        + "- **0.0 to 0.4** narrows the choice toward the likely token. Useful for extraction, labels and regression checks.\n"
+        + "- **0.5 to 0.9** keeps the reply on topic while allowing a little variation in wording.\n"
+        + "- **1.0 to 1.5** opens up phrasing and structure. Test the same prompt a few times and compare.\n"
+        + "- **Above 1.5** can drift or break format. Keep the system prompt tight if you go there.\n\n"
+        + "**A practical check**\n\n"
+        + "1. Set temperature to 0.2 and run your prompt three times. Note how little the answers differ.\n"
+        + "2. Set it to 1.2 and run the same prompt three times. Compare openings, length and structure.\n"
+        + "3. Keep the value that matches the job, then change one other parameter at a time.\n\n"
+        + "Max output is currently capped at " + cfg.maxTokens + " tokens, so long answers will truncate before they finish.";
+    } else if (/(debounce|javascript|function|test|code|utility)/.test(p)) {
+      body = "Here is a compact debounce with a cancel method and one test that covers rapid calls.\n\n"
+        + "```js\nfunction debounce(fn, wait = 200) {\n  let timer = null;\n\n  const debounced = (...args) => {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn(...args), wait);\n  };\n\n  debounced.cancel = () => {\n    clearTimeout(timer);\n    timer = null;\n  };\n\n  return debounced;\n}\n\n// test: rapid calls keep only the last payload\nconst calls = [];\nconst save = debounce((value) => calls.push(value), 50);\n\nsave(\"first\");\nsave(\"second\");\n\nsetTimeout(() => {\n  console.log(calls); // [\"second\"]\n}, 80);\n```\n\n"
+        + "**What to check**\n\n"
+        + "- Cancel clears the pending call, so an unmounted component does not write later.\n"
+        + "- The timer is stored outside the returned function, so every call shares one pending timeout.\n"
+        + "- The test waits longer than the delay before checking the calls array.\n\n"
+        + "This is a sample implementation, not model output. A live run may choose a different API shape.";
+    } else if (/(meeting|action item|notes|summar|checkout|coupon)/.test(p)) {
+      body = "### Action items\n\n"
+        + "1. **Profile the mobile checkout path** and record where the first paint stalls. Owner: checkout team. Due before the release candidate.\n"
+        + "2. **Reproduce the coupon field reports** against the three tickets and group them by root cause. Owner: support engineering.\n"
+        + "3. **Decide the coupon field fix** after the reproduction pass. Owner: product lead.\n"
+        + "4. **Cut a release candidate** and attach the profiling notes. Owner: release owner.\n"
+        + "5. **Send a short status note** to support with what shipped and what slipped. Owner: project lead.\n\n"
+        + "**Flags in the sample**\n\n"
+        + "- No owner is named for the performance work in the notes, so the first item assigns the checkout team.\n"
+        + "- The Friday target is relative to this session, not a fixed date.\n\n"
+        + "A live model would quote your notes directly and could ask a clarifying question before assigning owners. This sample was written locally.";
+    } else if (/(tagline|temperature 0\.2|temperature 1\.4|poem|story|slogan)/.test(p)) {
+      body = "### Two directions for the same brief\n\n"
+        + "**At temperature 0.2** a model tends to converge on a direct, conventional line and repeat it across runs.\n\n"
+        + "- “Schedule the work. Keep the team aligned.”\n"
+        + "- “Plan the week before it starts.”\n\n"
+        + "**At temperature 1.4** phrasing opens up and the output starts to vary between runs.\n\n"
+        + "- “A calendar that argues less.”\n"
+        + "- “The week, already sorted.”\n\n"
+        + "**How to read the difference**\n\n"
+        + "The low setting optimizes for the safest continuation. The high setting samples further down the distribution, so you get more surprise and less consistency. For a tagline you plan to ship, generate a batch at both settings, then judge them with the same criteria.\n\n"
+        + "The samples above are written locally. Your current temperature is " + temp + " and the output ceiling is " + cfg.maxTokens + " tokens.";
+    } else {
+      const words = estimateTokens(prompt);
+      body = "**The request path is ready**\n\n"
+        + "Your prompt is held in this session at temperature " + temp + " with a " + cfg.maxTokens + "-token ceiling. About " + words + " tokens of input are estimated from the text.\n\n"
+        + "With a " + provider.label + " key in place, the page would send:\n\n"
+        + "1. Your system prompt, as the first instruction.\n"
+        + "2. The conversation so far, trimmed to the most recent turns.\n"
+        + "3. This prompt, followed by the streaming response.\n\n"
+        + "**What you can test without a key**\n\n"
+        + "- Move the temperature slider and watch the gauge update.\n"
+        + "- Change the output ceiling and send another prompt.\n"
+        + "- Try one of the three starters in an empty session.\n\n"
+        + "Add your own key in Parameters when you want the model to answer instead of this local note.";
+    }
+
+    return header + "\n\n" + body + "\n\n---\nSettings for this preview: temperature " + temp
+      + ", max output " + cfg.maxTokens + " tokens, stream " + (cfg.stream ? "on" : "off") + ".";
+  }
+
+  async function runPreview(prompt, push, signal) {
+    await sleep(320, signal);
+    let text = previewReply(prompt);
+    const capChars = Math.max(160, state.cfg.maxTokens * 4);
+    if (text.length > capChars) {
+      let cut = text.slice(0, capChars);
+      const lastSpace = cut.lastIndexOf(" ");
+      if (lastSpace > 120) cut = cut.slice(0, lastSpace);
+      if (((cut.match(/```/g) || []).length % 2) === 1) cut += "\n```";
+      text = cut.trimEnd() + "\n\n*Preview stopped at the " + state.cfg.maxTokens + "-token output cap.*";
+    }
+    if (!text) text = "Preview finished with no text.";
+    const chunks = text.match(/(\s+|\S+)/g) || [];
+    let sent = 0;
+    for (const chunk of chunks) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      push(chunk);
+      sent += chunk.length;
+      const delay = text.length > 1400 ? 6 : 12;
+      await sleep(delay, signal);
+    }
+    if (sent === 0) push("Preview finished with no text.");
+  }
+
+  /* ---------------- provider requests ---------------- */
+  function endpointFor(cfg) {
+    const provider = PROVIDERS[cfg.provider] || PROVIDERS.openai;
+    const base = (cfg.baseUrl || provider.base || "").trim().replace(/\/+$/, "");
+    if (!base) throw new Error("Add an API base URL in Advanced before sending");
+    if (provider.kind === "anthropic") {
+      if (/\/messages$/.test(base)) return base;
+      if (/\/v1$/.test(base)) return base + "/messages";
+      return base + "/v1/messages";
+    }
+    if (provider.kind === "gemini") return base;
+    return /\/chat\/completions$/.test(base) ? base : base + "/chat/completions";
+  }
+
+  function validBase(url) {
+    try { const u = new URL(url); return u.protocol === "https:" || u.protocol === "http:"; }
+    catch (e) { return false; }
+  }
+
+  function normalizeHistory(messages) {
+    return messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .filter((m) => !m.error && typeof m.content === "string" && m.content.trim())
+      .slice(-20)
+      .map((m) => ({ role: m.role, content: m.content }));
+  }
+
+  function anthropicHistory(messages) {
+    const out = [];
+    for (const m of normalizeHistory(messages)) {
+      if (out.length && out[out.length - 1].role === m.role) {
+        out[out.length - 1].content += "\n\n" + m.content;
+      } else {
+        out.push({ role: m.role, content: m.content });
+      }
+    }
+    if (out.length && out[0].role === "assistant") out.unshift({ role: "user", content: "Continue the conversation." });
+    return out;
+  }
+
+  async function responseError(res) {
+    let detail = "";
+    try {
+      const text = await res.text();
+      try {
+        const parsed = JSON.parse(text);
+        detail = (parsed && parsed.error && (parsed.error.message || parsed.error.type))
+          || (parsed && parsed.message)
+          || text;
+      } catch (e) { detail = text; }
+    } catch (e) { detail = ""; }
+    const err = new Error((res.status || "Request") + " " + (detail || res.statusText || "failed"));
+    err.status = res.status;
+    return err;
+  }
+
+  function normalizeError(error) {
+    let detail = String((error && error.message) || error || "Unknown error");
+    let hint = "Check the key and the base URL in Parameters, then retry.";
+    if (/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(detail)) {
+      hint = "The request did not reach the provider. Check the base URL and whether this provider allows direct browser requests.";
+    } else if (/\b401\b|invalid.*key|unauthori[sz]ed|authentication/i.test(detail)) {
+      hint = "The key was rejected. Confirm it belongs to the selected provider.";
+    } else if (/\b403\b|forbidden|permission/i.test(detail)) {
+      hint = "The key is valid but the request is not allowed. Check the key's access and browser-use permissions.";
+    } else if (/\b404\b|not found|unknown model/i.test(detail)) {
+      hint = "The endpoint was not found. Check the base URL in Advanced; the page picks a model automatically.";
+    } else if (/\b429\b|rate limit|quota/i.test(detail)) {
+      hint = "The provider is rate limiting this key. Wait a moment, then retry.";
+    } else if (/\b400\b|bad request|temperature/i.test(detail)) {
+      hint = "The provider rejected a parameter. Try a lower temperature or a shorter output cap.";
+    }
+    if (detail.length > 420) detail = detail.slice(0, 420) + "…";
+    return { detail, hint };
+  }
+
+  function readSSE(res, onPayload, signal) {
+    return new Promise((resolve, reject) => {
+      const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+      if (!reader) {
+        res.text().then((text) => {
+          text.split(/\r?\n/).forEach((line) => {
+            if (!line.startsWith("data:")) return;
+            const data = line.slice(5).trim();
+            if (!data || data === "[DONE]") return;
+            try { onPayload(JSON.parse(data)); } catch (e) { /* ignore malformed frame */ }
+          });
+          resolve();
+        }).catch(reject);
+        return;
+      }
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const pump = () => {
+        if (signal && signal.aborted) {
+          try { reader.cancel(); } catch (e) { /* ignore */ }
+          reject(new DOMException("Aborted", "AbortError"));
+          return;
+        }
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            if (buffer.trim()) {
+              const line = buffer.trim();
+              if (line.startsWith("data:")) {
+                const data = line.slice(5).trim();
+                if (data && data !== "[DONE]") { try { onPayload(JSON.parse(data)); } catch (e) { /* ignore */ } }
+              }
+            }
+            resolve();
+            return;
+          }
+          buffer += decoder.decode(value, { stream: true });
+          let index;
+          while ((index = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, index).replace(/\r$/, "");
+            buffer = buffer.slice(index + 1);
+            if (!line.startsWith("data:")) continue;
+            const data = line.slice(5).trim();
+            if (!data || data === "[DONE]") continue;
+            try { onPayload(JSON.parse(data)); }
+            catch (e) { /* providers occasionally send keepalives */ }
+          }
+          pump();
+        }).catch(reject);
+      };
+      pump();
+    });
+  }
+
+  function openAiText(obj) {
+    if (!obj) return "";
+    if (obj.error) throw new Error(obj.error.message || "Provider error");
+    const choice = obj.choices && obj.choices[0];
+    if (!choice) return "";
+    return (choice.delta && typeof choice.delta.content === "string" ? choice.delta.content : "")
+      || (choice.message && typeof choice.message.content === "string" ? choice.message.content : "");
+  }
+
+  function anthropicText(obj) {
+    if (!obj) return "";
+    if (obj.type === "error") throw new Error(obj.error && obj.error.message ? obj.error.message : "Anthropic error");
+    if (obj.type === "content_block_delta" && obj.delta && typeof obj.delta.text === "string") return obj.delta.text;
+    if (Array.isArray(obj.content)) return obj.content.filter((p) => p.type === "text").map((p) => p.text || "").join("");
+    return "";
+  }
+
+  function geminiText(obj) {
+    if (!obj) return "";
+    if (obj.error) throw new Error(obj.error.message || "Gemini error");
+    if (obj.promptFeedback && obj.promptFeedback.blockReason) {
+      throw new Error("Gemini blocked the prompt: " + obj.promptFeedback.blockReason);
+    }
+    const candidate = obj.candidates && obj.candidates[0];
+    if (!candidate) return "";
+    const parts = (candidate.content && candidate.content.parts) || [];
+    return parts.map((part) => part.text || "").join("");
+  }
+
+  function pickModel(ids, fallback) {
+    const usable = (ids || []).filter(Boolean)
+      .filter((id) => typeof id === "string" && !/embed|whisper|tts|dall-e|image|moderation|rerank|audio|transcri|sora|realtime|guard|deprecated/i.test(id));
+    return usable.find((id) => id === fallback)
+      || usable.find((id) => /(mini|flash|haiku|small|instant|8b)/i.test(id))
+      || usable.find((id) => /(gpt|claude|gemini|llama|mistral|mixtral|deepseek|qwen|gemma|command|phi)/i.test(id))
+      || usable[0]
+      || fallback;
+  }
+
+  async function resolveModel(provider, key, signal) {
+    const cacheId = modelCacheKey();
+    if (modelCache.has(cacheId)) return modelCache.get(cacheId);
+    const fallback = FALLBACK_MODELS[state.cfg.provider] || FALLBACK_MODELS.openai;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4500);
+    const relay = () => controller.abort();
+    if (signal) signal.addEventListener("abort", relay, { once: true });
+    try {
+      const cfg = state.cfg;
+      const rawBase = (cfg.baseUrl || provider.base || "").trim().replace(/\/+$/, "");
+      if (!rawBase) return fallback;
+      let url = "";
+      let headers = {};
+      let readIds = () => [];
+      if (provider.kind === "anthropic") {
+        const root = rawBase.replace(/\/messages$/, "");
+        url = /\/v1$/.test(root) ? root + "/models" : root + "/v1/models";
+        headers = { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" };
+        readIds = (data) => (data.data || []).map((item) => item.id);
+      } else if (provider.kind === "gemini") {
+        url = rawBase + "/models?key=" + encodeURIComponent(key);
+        readIds = (data) => (data.models || [])
+          .filter((item) => (item.supportedGenerationMethods || []).includes("generateContent"))
+          .map((item) => String(item.name || "").replace(/^models\//, ""));
+      } else {
+        const root = rawBase.replace(/\/chat\/completions$/, "");
+        url = root + "/models";
+        headers = { Authorization: "Bearer " + key };
+        readIds = (data) => (Array.isArray(data.data) ? data.data.map((item) => item.id) : []);
+      }
+      const res = await fetch(url, { headers, signal: controller.signal });
+      if (!res.ok) throw new Error("Model list unavailable");
+      const data = await res.json();
+      const chosen = pickModel(readIds(data), fallback);
+      modelCache.set(cacheId, chosen);
+      return chosen;
+    } catch (e) {
+      if (!(signal && signal.aborted)) modelCache.set(cacheId, fallback);
+      return fallback;
+    } finally {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", relay);
+    }
+  }
+
+  async function callProvider(history, system, push, signal) {
+    const cfg = state.cfg;
+    const provider = providerConfig();
+    const key = state.key.trim();
+    const base = endpointFor(cfg);
+    const model = await resolveModel(provider, key, signal);
+
+    let url = base;
+    let headers = { "Content-Type": "application/json" };
+    let body;
+
+    if (provider.kind === "anthropic") {
+      if (!validBase(base)) throw new Error("The Anthropic endpoint is not a valid URL. Check Advanced");
+      headers["x-api-key"] = key;
+      headers["anthropic-version"] = "2023-06-01";
+      headers["anthropic-dangerous-direct-browser-access"] = "true";
+      body = {
+        model,
+        max_tokens: cfg.maxTokens,
+        temperature: cfg.temperature,
+        messages: anthropicHistory(history),
+        stream: Boolean(cfg.stream)
+      };
+      if (system && system.trim()) body.system = system;
+    } else if (provider.kind === "gemini") {
+      if (!validBase(base)) throw new Error("The Gemini base URL is not valid. Check Advanced");
+      const geminiModel = model.replace(/^models\//, "");
+      const action = cfg.stream ? "streamGenerateContent" : "generateContent";
+      url = base + "/models/" + encodeURIComponent(geminiModel) + ":" + action
+        + "?key=" + encodeURIComponent(key) + (cfg.stream ? "&alt=sse" : "");
+      const contents = normalizeHistory(history).map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }]
+      }));
+      body = {
+        contents,
+        generationConfig: { temperature: cfg.temperature, maxOutputTokens: cfg.maxTokens }
+      };
+      if (system && system.trim()) body.systemInstruction = { parts: [{ text: system }] };
+    } else {
+      if (!validBase(base)) throw new Error("The API base URL is not valid. Add one in Advanced");
+      headers.Authorization = "Bearer " + key;
+      if (cfg.provider === "openrouter") {
+        headers["HTTP-Referer"] = location.origin && location.origin !== "null" ? location.origin : "https://llm-playground.local";
+        headers["X-Title"] = "LLM Playground";
+      }
+      const messages = [];
+      if (system && system.trim()) messages.push({ role: "system", content: system });
+      normalizeHistory(history).forEach((m) => messages.push(m));
+      body = {
+        model,
+        messages,
+        temperature: cfg.temperature,
+        max_tokens: cfg.maxTokens,
+        stream: Boolean(cfg.stream)
+      };
+    }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal
+    });
+    if (!res.ok) throw await responseError(res);
+
+    const contentType = res.headers.get("content-type") || "";
+    const isStream = cfg.stream && contentType.includes("text/event-stream");
+
+    if (!isStream) {
+      const data = await res.json();
+      if (provider.kind === "anthropic") push(anthropicText(data));
+      else if (provider.kind === "gemini") push(geminiText(data));
+      else push(openAiText(data));
+      return;
+    }
+
+    await readSSE(res, (payload) => {
+      let delta = "";
+      if (provider.kind === "anthropic") delta = anthropicText(payload);
+      else if (provider.kind === "gemini") delta = geminiText(payload);
+      else delta = openAiText(payload);
+      if (delta) push(delta);
+    }, signal);
+  }
+
+  /* ---------------- sending ---------------- */
+  async function sendPrompt(rawText) {
+    const text = String(rawText || "").trim();
+    if (!text) { toast("Write a prompt first", "error"); els.prompt.focus(); return; }
+    if (state.streaming) return;
+
+    const chat = activeChat();
+    if (!chat.messages.length && (!chat.title || chat.title === "Untitled session")) {
+      chat.title = titleFromPrompt(text);
+      els.chatTitle.textContent = chat.title;
+    }
+    const now = Date.now();
+    chat.messages.push({ id: uid(), role: "user", content: text, ts: now, provider: state.cfg.provider });
+    chat.updatedAt = now;
+    els.prompt.value = "";
+    autoGrow();
+    updateSendState();
+    updateEstimate();
+    renderSidebar();
+    renderHeader();
+    renderMessages();
+    els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
+    persistChats();
+    await runAssistant();
+  }
+
+  async function runAssistant() {
+    const chat = activeChat();
+    const lastUser = [...chat.messages].reverse().find((m) => m.role === "user" && !m.error);
+    if (!lastUser) { toast("No prompt to answer", "error"); return; }
+    if (state.streaming) return;
+
+    const history = chat.messages.slice(0, chat.messages.indexOf(lastUser) + 1);
+    const assistant = {
+      id: uid(),
+      role: "assistant",
+      content: "",
+      ts: Date.now(),
+      provider: state.cfg.provider,
+      demo: !hasKey(),
+      pending: true
+    };
+    chat.messages.push(assistant);
+    chat.updatedAt = Date.now();
+    renderHeader();
+    state.streaming = true;
+    state.streamMsgId = assistant.id;
+    state.preview = !hasKey();
+    state.controller = new AbortController();
+    const signal = state.controller.signal;
+    const startedAt = performance.now();
+    let firstAt = 0;
+
+    renderMessages();
+    updateSendState();
+    els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
+    els.liveStatus.textContent = state.preview ? "Writing a local preview" : "Waiting for the provider";
+    const push = (delta) => {
+      if (!delta) return;
+      if (!firstAt) firstAt = performance.now();
+      assistant.content += delta;
+      scheduleStreamRender(assistant);
+    };
+
+    try {
+      if (state.preview) {
+        await runPreview(lastUser.content, push, signal);
+      } else {
+        await callProvider(history, state.cfg.system, push, signal);
+      }
+      if (!assistant.content.trim()) {
+        assistant.error = true;
+        assistant.errorDetail = "The provider returned an empty response.";
+        assistant.errorHint = "Turn streaming off in Advanced, check the provider, or retry the prompt.";
+      }
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        assistant.stopped = true;
+        if (!assistant.content.trim()) {
+          assistant.error = true;
+          assistant.errorDetail = "Generation stopped before any text arrived.";
+          assistant.errorHint = "Send the prompt again when you are ready.";
+        }
+      } else {
+        const info = normalizeError(error);
+        assistant.error = true;
+        assistant.errorDetail = info.detail;
+        assistant.errorHint = info.hint;
+      }
+    } finally {
+      assistant.pending = false;
+      assistant.stats = {
+        ms: Math.round(performance.now() - startedAt),
+        tokens: estimateTokens(assistant.content),
+        firstMs: firstAt ? Math.round(firstAt - startedAt) : 0
+      };
+      state.streaming = false;
+      state.controller = null;
+      state.streamMsgId = null;
+      if (state.raf) { cancelAnimationFrame(state.raf); state.raf = null; }
+      updateSendState();
+      renderMessages();
+      renderHeader();
+      renderSidebar();
+      persistChats();
+      updateEstimate();
+      els.liveStatus.textContent = assistant.error ? "The request ended with an error" : "Response finished";
+      if (assistant.error) toast(state.preview ? "Preview could not finish" : "Request failed. Open the response for details", "error");
+    }
+  }
+
+  function stopStreaming() {
+    if (!state.streaming) return;
+    if (state.controller) state.controller.abort();
+    els.liveStatus.textContent = "Stopping generation";
+  }
+
+  function retryLastPrompt() {
+    if (state.streaming) { toast("Wait for the current reply or stop it", "error"); return; }
+    const chat = activeChat();
+    let lastUserId = -1;
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      if (chat.messages[i].role === "user" && !chat.messages[i].error) { lastUserId = i; break; }
+    }
+    if (lastUserId === -1) { toast("Nothing to retry yet", "error"); return; }
+    const hasAssistantAfter = chat.messages.slice(lastUserId + 1).some((m) => m.role === "assistant");
+    if (!hasAssistantAfter) { toast("That prompt has no reply yet", "error"); return; }
+    chat.messages = chat.messages.slice(0, lastUserId + 1);
+    chat.updatedAt = Date.now();
+    renderMessages();
+    renderHeader();
+    persistChats();
+    runAssistant();
+  }
+
+  function copyTranscript() {
+    const chat = activeChat();
+    if (!chat.messages.length) { toast("This session has no messages", "error"); return; }
+    const text = chat.messages.map((m) => {
+      const who = m.role === "user" ? "You" : "Assistant" + (m.demo ? " (preview)" : "");
+      return who + ":\n" + (m.content || (m.error ? m.errorDetail : ""));
+    }).join("\n\n");
+    copyText(text, "Transcript copied");
+  }
+
+  function exportChat() {
+    const chat = activeChat();
+    if (!chat.messages.length) { toast("This session has no messages", "error"); return; }
+    const payload = {
+      app: "LLM Playground",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      session: {
+        title: chat.title,
+        createdAt: new Date(chat.createdAt).toISOString(),
+        updatedAt: new Date(chat.updatedAt).toISOString()
+      },
+      settings: {
+        provider: state.cfg.provider,
+        providerLabel: providerConfig().label,
+        temperature: state.cfg.temperature,
+        maxTokens: state.cfg.maxTokens,
+        systemPrompt: state.cfg.system,
+        stream: state.cfg.stream
+      },
+      messages: chat.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        provider: m.provider,
+        preview: Boolean(m.demo),
+        error: Boolean(m.error),
+        errorDetail: m.errorDetail || "",
+        stats: m.stats || null,
+        at: new Date(m.ts).toISOString()
+      }))
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "llm-playground-" + chat.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) + ".json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+    toast("Session exported · key not included");
+  }
+
+  function clearCurrentChat() {
+    if (state.streaming) { toast("Stop the current reply before clearing the session", "error"); return; }
+    const chat = activeChat();
+    if (!chat.messages.length) { toast("This session is already empty", "error"); return; }
+    if (!window.confirm("Clear every message in this session? This cannot be undone.")) return;
+    chat.messages = [];
+    chat.title = "Untitled session";
+    chat.updatedAt = Date.now();
+    persistChats();
+    renderSidebar();
+    renderHeader();
+    renderMessages();
+    updateSendState();
+    toast("Session cleared");
+  }
+
+  function deleteChat(id) {
+    if (state.streaming) { toast("Stop the current reply before deleting a session", "error"); return; }
+    state.renamingId = null;
+    const chat = state.chats.find((c) => c.id === id);
+    if (!chat) return;
+    if (!window.confirm('Delete "' + chat.title + '"? This removes it from this browser.')) return;
+    state.chats = state.chats.filter((c) => c.id !== id);
+    if (!state.chats.length) state.chats = [newChatObject()];
+    if (!state.chats.some((c) => c.id === state.activeId)) state.activeId = state.chats[0].id;
+    persistChats();
+    syncAllUI();
+    toast("Session deleted");
+  }
+
+  function startNewChat() {
+    if (state.streaming) { toast("Stop the current reply before starting a session", "error"); return; }
+    state.renamingId = null;
+    const current = activeChat();
+    if (!current.messages.length) {
+      els.prompt.focus();
+      closeSidebar();
+      toast("You are already in a fresh session");
+      return;
+    }
+    const chat = newChatObject();
+    state.chats.unshift(chat);
+    state.activeId = chat.id;
+    persistChats();
+    syncAllUI();
+    closeSidebar();
+    els.prompt.focus();
+  }
+
+  /* ---------------- renaming ---------------- */
+  function sanitizeTitle(value) {
+    const clean = String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 80);
+    return clean || "Untitled session";
+  }
+
+  function findSessionRow(id) {
+    return Array.from(els.sessionList.querySelectorAll(".sess")).find((row) => row.dataset.id === id) || null;
+  }
+
+  function beginRename(id) {
+    const chat = state.chats.find((c) => c.id === id);
+    if (!chat) return;
+    if (state.renamingId) { state.renamingId = null; renderSidebar(); }
+    renderSidebar();
+    const row = findSessionRow(id);
+    if (!row) return;
+    const title = row.querySelector(".sess-title");
+    if (!title) return;
+
+    state.renamingId = id;
+    row.classList.add("renaming");
+
+    const input = document.createElement("input");
+    input.className = "sess-rename-input";
+    input.type = "text";
+    input.maxLength = 80;
+    input.value = chat.title === "Untitled session" ? "" : chat.title;
+    input.placeholder = "Session name";
+    input.setAttribute("aria-label", "Session name");
+    input.autocomplete = "off";
+    title.replaceWith(input);
+
+    ["click", "dblclick", "pointerdown", "mousedown"].forEach((name) => {
+      input.addEventListener(name, (event) => event.stopPropagation());
+    });
+
+    let closed = false;
+    const finish = (save) => {
+      if (closed) return;
+      closed = true;
+      if (state.renamingId === id) state.renamingId = null;
+      const next = sanitizeTitle(input.value);
+      if (save && next !== chat.title) {
+        chat.title = next;
+        persistChats();
+        renderHeader();
+        toast("Session renamed");
+      }
+      renderSidebar();
+      const restored = findSessionRow(chat.id);
+      if (restored) restored.focus({ preventScroll: true });
+    };
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); finish(true); }
+      else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+    });
+    input.addEventListener("blur", () => { if (!closed) finish(true); });
+
+    requestAnimationFrame(() => {
+      input.focus({ preventScroll: true });
+      input.select();
+    });
+  }
+
+  function renameActiveSession() {
+    const chat = activeChat();
+    const mobile = window.innerWidth < 1024;
+    if (mobile) openSidebar();
+    setTimeout(() => beginRename(chat.id), mobile ? 280 : 0);
+  }
+
+  /* ---------------- overlays ---------------- */
+  function openSidebar() {
+    els.sidebar.classList.add("open");
+    els.scrim.classList.add("show");
+    els.sidebarToggle.setAttribute("aria-expanded", "true");
+  }
+  function closeSidebar() {
+    els.sidebar.classList.remove("open");
+    els.sidebarToggle.setAttribute("aria-expanded", "false");
+    if (!els.params.classList.contains("open")) els.scrim.classList.remove("show");
+  }
+  function openParams(focusKey) {
+    els.params.classList.add("open");
+    els.sidebar.classList.remove("open");
+    els.sidebarToggle.setAttribute("aria-expanded", "false");
+    els.paramsToggle.setAttribute("aria-expanded", "true");
+    els.scrim.classList.add("show");
+    if (focusKey && window.innerWidth < 1280) {
+      setTimeout(() => { els.apiKey.focus({ preventScroll: true }); }, 240);
+    }
+  }
+  function closeParams() {
+    els.params.classList.remove("open");
+    els.paramsToggle.setAttribute("aria-expanded", "false");
+    if (!els.sidebar.classList.contains("open")) els.scrim.classList.remove("show");
+  }
+  function closeOverlays() {
+    closeSidebar();
+    closeParams();
+  }
+
+  /* ---------------- settings handlers ---------------- */
+  function debounceSaveConfig() {
+    clearTimeout(state.saveTimer);
+    state.saveTimer = setTimeout(persistConfig, 250);
+  }
+
+  function onTemperature(value) {
+    state.cfg.temperature = clamp(Math.round(Number(value) * 100) / 100, 0, 2);
+    renderGauge();
+    renderConnection();
+    updateEstimate();
+    debounceSaveConfig();
+  }
+
+  function onMaxTokens(value) {
+    state.cfg.maxTokens = clamp(Math.round(Number(value)), 64, 4096);
+    renderGauge();
+    renderConnection();
+    debounceSaveConfig();
+  }
+
+  function applyProviderChange(providerId) {
+    if (!PROVIDERS[providerId]) return;
+    state.cfg.provider = providerId;
+    const provider = PROVIDERS[providerId];
+    state.cfg.baseUrl = provider.base;
+    modelCache.clear();
+    syncProviderFields();
+    renderGauge();
+    renderConnection();
+    renderHeader();
+    persistConfig();
+    updateEstimate();
+    toast(provider.label + " selected");
+  }
+
+  function toggleKeyVisibility() {
+    const visible = els.apiKey.type === "text";
+    els.apiKey.type = visible ? "password" : "text";
+    els.toggleKey.setAttribute("aria-label", visible ? "Show API key" : "Hide API key");
+    els.toggleKey.title = visible ? "Show key" : "Hide key";
+    els.keyEyeIcon.innerHTML = '<use href="#' + (visible ? "i-eye" : "i-eye-off") + '"/>';
+  }
+
+  /* ---------------- events ---------------- */
+  els.composer.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (state.streaming) { stopStreaming(); return; }
+    sendPrompt(els.prompt.value);
+  });
+
+  els.prompt.addEventListener("input", () => { autoGrow(); updateSendState(); updateEstimate(); });
+  els.prompt.addEventListener("keydown", (event) => {
+    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing && !coarse) {
+      event.preventDefault();
+      if (state.streaming) return;
+      if (els.prompt.value.trim()) els.composer.requestSubmit();
+    }
+  });
+
+  els.sendBtn.addEventListener("click", (event) => {
+    if (state.streaming) { event.preventDefault(); stopStreaming(); }
+  });
+
+  els.temperature.addEventListener("input", (event) => onTemperature(event.target.value));
+  els.maxTokens.addEventListener("input", (event) => onMaxTokens(event.target.value));
+
+  $$(".preset").forEach((btn) => btn.addEventListener("click", () => onTemperature(btn.dataset.temp)));
+
+  els.systemPrompt.addEventListener("input", () => {
+    state.cfg.system = els.systemPrompt.value.slice(0, 4000);
+    updateSystemMeta();
+    updateEstimate();
+    debounceSaveConfig();
+  });
+
+  els.provider.addEventListener("change", () => applyProviderChange(els.provider.value));
+
+  els.baseUrl.addEventListener("input", () => {
+    state.cfg.baseUrl = els.baseUrl.value.trim();
+    modelCache.clear();
+    debounceSaveConfig();
+  });
+
+  const commitTemp = () => {
+    let value = parseFloat(String(els.gaugeTemp.value).replace(",", "."));
+    if (!Number.isFinite(value)) value = state.cfg.temperature;
+    value = clamp(value, 0, 2);
+    onTemperature(value);
+    els.gaugeTemp.value = value.toFixed(2);
+  };
+  els.gaugeTemp.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); commitTemp(); els.gaugeTemp.blur(); }
+    if (event.key === "Escape") { els.gaugeTemp.value = state.cfg.temperature.toFixed(2); els.gaugeTemp.blur(); }
+  });
+  els.gaugeTemp.addEventListener("blur", commitTemp);
+  els.gaugeTemp.addEventListener("input", () => {
+    const value = parseFloat(String(els.gaugeTemp.value).replace(",", "."));
+    if (Number.isFinite(value)) onTemperature(value);
+  });
+
+  const commitTokens = () => {
+    let value = parseInt(String(els.gaugeTokens.value).replace(/[^\d]/g, ""), 10);
+    if (!Number.isFinite(value)) value = state.cfg.maxTokens;
+    onMaxTokens(value);
+    els.gaugeTokens.value = String(state.cfg.maxTokens);
+  };
+  els.gaugeTokens.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); commitTokens(); els.gaugeTokens.blur(); }
+    if (event.key === "Escape") { els.gaugeTokens.value = String(state.cfg.maxTokens); els.gaugeTokens.blur(); }
+  });
+  els.gaugeTokens.addEventListener("blur", commitTokens);
+  els.gaugeTokens.addEventListener("input", () => {
+    const value = parseInt(String(els.gaugeTokens.value).replace(/[^\d]/g, ""), 10);
+    if (Number.isFinite(value)) onMaxTokens(value);
+  });
+
+  els.systemToggle.addEventListener("click", () => {
+    const open = els.systemPanel.hidden;
+    els.systemPanel.hidden = !open;
+    els.systemToggle.setAttribute("aria-expanded", String(open));
+  });
+
+  els.streamToggle.addEventListener("change", () => {
+    state.cfg.stream = els.streamToggle.checked;
+    renderConnection();
+    persistConfig();
+  });
+
+  els.apiKey.addEventListener("input", () => {
+    state.key = els.apiKey.value;
+    modelCache.clear();
+    persistKey();
+    renderConnection();
+    updateSendState();
+  });
+
+  els.rememberKey.addEventListener("change", () => {
+    persistKey();
+    toast(els.rememberKey.checked ? "Key will be remembered on this device" : "Key now lasts for this tab only");
+    renderConnection();
+  });
+
+  els.clearKey.addEventListener("click", () => {
+    state.key = "";
+    els.apiKey.value = "";
+    els.rememberKey.checked = false;
+    modelCache.clear();
+    local.del(K.key); local.del(K.remember); session.del(K.key);
+    renderConnection();
+    updateSendState();
+    toast("Key cleared");
+  });
+
+  els.toggleKey.addEventListener("click", toggleKeyVisibility);
+
+  els.newChat.addEventListener("click", startNewChat);
+
+  els.sessionList.addEventListener("click", (event) => {
+    if (event.target.closest(".sess-rename-input")) return;
+    const ren = event.target.closest("[data-rename]");
+    if (ren) { event.stopPropagation(); beginRename(ren.dataset.rename); return; }
+    const del = event.target.closest("[data-del]");
+    if (del) { event.stopPropagation(); deleteChat(del.dataset.del); return; }
+    const row = event.target.closest(".sess");
+    if (!row) return;
+    if (state.streaming) {
+      toast("Stop the current reply before switching sessions", "error");
+      return;
+    }
+    const chat = state.chats.find((c) => c.id === row.dataset.id);
+    if (!chat) return;
+    state.renamingId = null;
+    state.activeId = chat.id;
+    persistChats();
+    renderSidebar();
+    renderHeader();
+    renderMessages();
+    updateSendState();
+    els.chatScroll.scrollTop = els.chatScroll.scrollHeight;
+    closeSidebar();
+  });
+
+  els.sessionList.addEventListener("keydown", (event) => {
+    if (event.target.closest(".sess-rename-input")) return;
+    if (event.key === "F2") {
+      const row = event.target.closest(".sess");
+      if (!row) return;
+      event.preventDefault();
+      beginRename(row.dataset.id);
+      return;
+    }
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest(".sess");
+    if (!row || event.target.closest("[data-del]") || event.target.closest("[data-rename]")) return;
+    event.preventDefault();
+    row.click();
+  });
+
+  els.sessionList.addEventListener("dblclick", (event) => {
+    if (event.target.closest(".sess-rename-input") || event.target.closest("button")) return;
+    const row = event.target.closest(".sess");
+    if (!row) return;
+    event.preventDefault();
+    beginRename(row.dataset.id);
+  });
+
+  els.messages.addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-act]");
+    if (!btn) return;
+    const article = btn.closest(".msg");
+    if (!article) return;
+    const chat = activeChat();
+    const message = chat.messages.find((m) => m.id === article.dataset.id);
+    if (!message) return;
+    if (btn.dataset.act === "copy") {
+      copyText(message.content || message.errorDetail || "", "Message copied");
+    } else if (btn.dataset.act === "retry") {
+      retryLastPrompt();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const btn = event.target.closest(".code-copy");
+    if (!btn) return;
+    const block = btn.closest(".code-block");
+    const code = block && block.querySelector("code");
+    if (code) copyText(code.textContent, "Code copied");
+  });
+
+  $$(".starter").forEach((btn) => btn.addEventListener("click", () => {
+    if (state.streaming) { toast("Stop the current reply first", "error"); return; }
+    els.prompt.value = btn.dataset.prompt || btn.textContent.trim();
+    autoGrow();
+    updateSendState();
+    sendPrompt(els.prompt.value);
+  }));
+
+  $("#renameChat").addEventListener("click", renameActiveSession);
+  els.chatTitle.addEventListener("dblclick", renameActiveSession);
+  $("#copyChat").addEventListener("click", copyTranscript);
+  $("#exportChat").addEventListener("click", exportChat);
+  $("#clearChat").addEventListener("click", clearCurrentChat);
+  $("#resetParams").addEventListener("click", () => {
+    state.cfg.temperature = DEFAULT_CFG.temperature;
+    state.cfg.maxTokens = DEFAULT_CFG.maxTokens;
+    state.cfg.system = DEFAULT_CFG.system;
+    state.cfg.stream = true;
+    syncProviderFields();
+    renderGauge();
+    renderConnection();
+    persistConfig();
+    updateEstimate();
+    toast("Parameters reset");
+  });
+  $("#resetSystem").addEventListener("click", () => {
+    state.cfg.system = "";
+    els.systemPrompt.value = "";
+    updateSystemMeta();
+    updateEstimate();
+    persistConfig();
+    toast("System prompt cleared");
+  });
+
+  els.sidebarToggle.addEventListener("click", () => {
+    if (els.sidebar.classList.contains("open")) closeSidebar(); else openSidebar();
+  });
+  els.sidebarClose.addEventListener("click", closeSidebar);
+  els.paramsToggle.addEventListener("click", () => {
+    if (els.params.classList.contains("open")) closeParams(); else openParams(false);
+  });
+  els.paramsClose.addEventListener("click", closeParams);
+  els.scrim.addEventListener("click", closeOverlays);
+
+  els.footCard.addEventListener("click", () => {
+    if (window.innerWidth >= 1280) {
+      els.apiKey.scrollIntoView({ behavior: "smooth", block: "center" });
+      els.apiKey.focus({ preventScroll: true });
+    } else {
+      openParams(true);
+    }
+  });
+
+  const help = els.helpDialog;
+  $("#helpBtn").addEventListener("click", () => {
+    if (typeof help.showModal === "function") help.showModal();
+    else help.setAttribute("open", "");
+  });
+  $("#helpClose").addEventListener("click", () => help.close());
+  help.addEventListener("click", (event) => {
+    const rect = help.getBoundingClientRect();
+    const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+    if (!inside) help.close();
+  });
+
+  $("#clearData").addEventListener("click", () => {
+    if (!window.confirm("Clear saved sessions, parameters and any remembered key from this browser?")) return;
+    Object.values(K).forEach((keyName) => { local.del(keyName); session.del(keyName); });
+    help.close();
+    location.reload();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (event.key === "F2" && !state.renamingId && target && !target.closest("input, textarea, select, [contenteditable='true']")) {
+      event.preventDefault();
+      renameActiveSession();
+      return;
+    }
+    if (event.key === "Escape") {
+      if (state.renamingId) return;
+      if (els.sidebar.classList.contains("open") || els.params.classList.contains("open")) {
+        closeOverlays();
+      }
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth >= 1280) {
+      els.params.classList.remove("open");
+      if (!els.sidebar.classList.contains("open")) els.scrim.classList.remove("show");
+    }
+    if (window.innerWidth >= 1024) {
+      els.sidebar.classList.remove("open");
+      if (!els.params.classList.contains("open")) els.scrim.classList.remove("show");
+    }
+  });
+
+  window.addEventListener("beforeunload", () => {
+    persistConfig();
+    persistChats();
+  });
+
+  setInterval(() => {
+    if (state.chats.length) renderSidebar();
+  }, 60000);
+
+  /* ---------------- boot ---------------- */
+  loadState();
+  els.rememberKey.disabled = false;
+  syncAllUI();
+  autoGrow();
+  updateSendState();
+  persistConfig();
+  persistChats();
+  els.prompt.focus({ preventScroll: true });
+})();
+
+</script>
+</body>
+</html>
